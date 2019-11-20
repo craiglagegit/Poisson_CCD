@@ -34,7 +34,7 @@ Installing: Read the Installation Section below.
 
 Running: The basic syntax is:
 
-src/Poisson   <configuration file>
+src/Poisson   config_file.cfg
 
 More details are provided in the Examples Section.
 
@@ -88,9 +88,9 @@ work should move to the master branch at
 
 There are a total of 14 examples included with the code. Each example is
 in a separate directory in the data directory, and has a configuration
-file of the form *.cfg. The parameters in the *.cfg files are
+file of the form file.cfg. The parameters in the file.cfg files are
 commented to explain(hopefully) the purpose of each parameter, and a
-detailed listing of all configuration parameters is in Appendix 1 of the
+detailed listing of all configuration parameters is in Appendix A of the
 docs/Poisson_Paper_19Nov19.pdf paper. Python plotting routines are
 included with instructions below on how to run the plotting routines and
 the expected output. The plot outputs are placed in the data/*/plots
