@@ -28,7 +28,7 @@ tested together. If you find a set of options that does not work as you
 expect, please let me know. However, all of the example configuration
 files described in the Examples Section below have been tested.
 
-This work is supported by DOE HEP Grant DE-SC0009999.
+Acknowledgements: This research was supported by DOE grant DE-SC0009999 and NSF/AURA grant N56981C.
 
 Installing: Read the Installation Section below.
 
