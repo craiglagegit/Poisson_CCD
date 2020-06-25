@@ -1089,14 +1089,25 @@ void MultiGrid::SetInitialVoltages(Array3D* phi, Array3D* eps, Array2DInt* BCTyp
       if ((NumPhases + CollectingPhases) % 2 == 0)
 	{
 	  // Even case - gate boundary coincident with pixel edge
-	  Ylower[m] = (double)m * GateWidth;
+	  Ylower[m] = (double)m * GateWidth - phi->dy / 2.0;	
+	  Yupper[m] = Ylower[m] + GateWidth;
+	  // Need to shift last gate by 1 grid to keep things centered.
+	  if (m == NumPhases - 2)
+	    {
+	      Yupper[m] += phi->dy;
+	    }
+	  if (m == NumPhases - 1)
+	    {
+	      Ylower[m] += phi->dy;
+	    }
 	}
       else
 	{
 	  // Odd case - gate boundary straddles pixel edge
 	  Ylower[m] = ((double)m - 0.5) * GateWidth;
+	  Yupper[m] = Ylower[m] + GateWidth;
 	}
-      Yupper[m] = Ylower[m] + GateWidth;
+      //printf("m = %d, Ylower = %f, Yupper = %f\n", m, Ylower[m], Yupper[m]);
     }
   for (p=0; p<(CollectingPhases-1); p++)
     {
