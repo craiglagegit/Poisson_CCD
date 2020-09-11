@@ -83,7 +83,10 @@ class MultiGrid
   int YBCType;            // Free or periodic BC in Y-direction
 
   // Voltages and Charges
-  double qfh;           // Quasi-Fermi level in hole regions
+  double qfh;           // Quasi-Fermi level in bulk
+  double qfh1;           // Quasi-Fermi level near bottom
+  int UseDoubleQFh;     // 0 - only 1 qfh, 1 - two values of qfh
+  double DoubleQFhZmax; // In PixelRegion, below this value, qfh1 applies
   double Ni;            // Intrinsic carrier concentration at operating temperature
   double ktq;           // kT/q
   double Vbb;		// Back bias

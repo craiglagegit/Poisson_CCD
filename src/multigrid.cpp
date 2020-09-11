@@ -539,6 +539,9 @@ void MultiGrid::ReadConfigurationFile(string inname)
   printf("There will be %d total multi-grids\n",(nsteps+1));  
   // nsteps is the number of reduction steps in the Vcycle_Inner Cycle.
   qfh = GetDoubleParam(inname, "qfh", -100.0, VerboseLevel);
+  qfh1 = GetDoubleParam(inname, "qfh1", -100.0, VerboseLevel);
+  UseDoubleQFh =  GetIntParam(inname, "UseDoubleQFh", 0, VerboseLevel);
+  DoubleQFhZmax = GetDoubleParam(inname, "DoubleQFhZmax", 0.0, VerboseLevel);  
   // Poisson solver constants
   w = GetDoubleParam(inname, "w", 1.9, VerboseLevel);			// Successive Over-Relaxation factor
   ncycle = GetIntParam(inname, "ncycle", 100, VerboseLevel);		// Number of SOR cycles at each resolution
@@ -1421,6 +1424,7 @@ double MultiGrid::SOR_Inner(Array3D* phi, Array3D* rho, Array3D* elec, Array3D* 
   bool InnerLoop;
   double ElecCharge=0.0, HoleCharge=0.0, Term1=0.0, Term2=0.0, CellVolume=0.0, AveIterations = 0.0;
   double NumElec=0.0, NumHoles=0.0, TotalHoles=0.0, TotalElectrons=0.0;
+  double localQFh = -100.0;
   int nn = 0, mm = 0, iter_counter, iter_limit = 10000, red_black;
   int i, j, k, kstart, kmax, im, ip, j0, jm, jp, nxy, ind, ind2, indmx, indpx, indmy, indpy, indmz, indpz;
   kmax = min(phi->nz - 1, elec->nz-1);
@@ -1624,7 +1628,23 @@ double MultiGrid::SOR_Inner(Array3D* phi, Array3D* rho, Array3D* elec, Array3D* 
 			  DeltaPhi = max(-MaxDeltaPhi, min(MaxDeltaPhi, newphi - phi->data[ind]));		  
 			  newphi = phi->data[ind] + DeltaPhi;
 			}			  
-		      if (k>=Ckmin->data[ind2] && phi->data[ind]<QFh->data[ind2]-MinDeltaPhi)
+		      // Allow use of two values of QFh.  A bit of a hack, but works.
+		      if (UseDoubleQFh == 0)
+			{
+			  localQFh = QFh->data[ind2];
+			}
+		      else
+			{
+			  if (phi->x[i] >= PixelRegionLowerLeft[0][0] && phi->x[i] <= PixelRegionUpperRight[0][0] && phi->y[j] >= PixelRegionLowerLeft[0][1] && phi->y[j] <= PixelRegionUpperRight[0][1] && phi->z[k] <= DoubleQFhZmax)
+			    {
+			      localQFh = qfh1;
+			    }
+			  else
+			    {
+			      localQFh = QFh->data[ind2];
+			    }
+			}
+		      if (k>=Ckmin->data[ind2] && phi->data[ind]<localQFh-MinDeltaPhi)
 			{
 			  // Inner Newton loop for holes
 			  InnerLoop = true;
@@ -1634,7 +1654,7 @@ double MultiGrid::SOR_Inner(Array3D* phi, Array3D* rho, Array3D* elec, Array3D* 
 			  while (tol > 1.0E-9 && iter_counter < iter_limit)
 			    {
 			      oldnewphi = newphi;
-			      exponent = min(MaxExponent,(QFh->data[ind2] - newphi) / ktq);// Prevents HoleCharge getting too large
+			      exponent = min(MaxExponent,(localQFh - newphi) / ktq);// Prevents HoleCharge getting too large
 			      HoleCharge = Ni * exp(exponent) * SORChargeFactor;
 			      Term2 = hsquared * w6 * HoleCharge / ktq;
 			      if (fabs(1.0 + Term2) < 1.0E-18) break;
