@@ -541,7 +541,8 @@ void MultiGrid::ReadConfigurationFile(string inname)
   qfh = GetDoubleParam(inname, "qfh", -100.0, VerboseLevel);
   qfh1 = GetDoubleParam(inname, "qfh1", -100.0, VerboseLevel);
   UseDoubleQFh =  GetIntParam(inname, "UseDoubleQFh", 0, VerboseLevel);
-  DoubleQFhZmax = GetDoubleParam(inname, "DoubleQFhZmax", 0.0, VerboseLevel);  
+  DoubleQFhZmax = GetDoubleParam(inname, "DoubleQFhZmax", 0.0, VerboseLevel);
+  DoubleQFhBuffer = GetDoubleParam(inname, "DoubleQFhBuffer", 0.0, VerboseLevel);    
   // Poisson solver constants
   w = GetDoubleParam(inname, "w", 1.9, VerboseLevel);			// Successive Over-Relaxation factor
   ncycle = GetIntParam(inname, "ncycle", 100, VerboseLevel);		// Number of SOR cycles at each resolution
@@ -600,6 +601,8 @@ void MultiGrid::ReadConfigurationFile(string inname)
   FieldOxideTaper = GetDoubleParam(inname, "FieldOxideTaper", 0.50, VerboseLevel);  
   ChannelStopWidth = GetDoubleParam(inname, "ChannelStopWidth", 1.0, VerboseLevel);
   BackgroundDoping = GetDoubleParam(inname, "BackgroundDoping", -1.0E12, VerboseLevel);
+  TopSurfaceDoping = GetDoubleParam(inname, "TopSurfaceDoping", -1.0E12, VerboseLevel);
+  TopDopingThickness = GetDoubleParam(inname, "TopDopingThickness", 0.0, VerboseLevel);
   ChannelSurfaceCharge = GetDoubleParam(inname, "ChannelSurfaceCharge", 0.0, VerboseLevel);
   ChannelStopSurfaceCharge = GetDoubleParam(inname, "ChannelStopSurfaceCharge", 0.0, VerboseLevel);
   ChannelStopSideDiff = GetDoubleParam(inname, "ChannelStopSideDiff", FieldOxideTaper, VerboseLevel);  
@@ -1239,7 +1242,14 @@ void MultiGrid::SetFixedCharges(Array3D* rho, Array2DInt* Ckmin)
 	  for (k=Ckmin->data[index]; k<rho->nz-1; k++)
 	    {
 	      index2 = index + k * rho->nx * rho->ny;
-	      rho->data[index2] = tr_background;
+	      if (rho->z[k] > (SensorThickness - TopDopingThickness))
+		{
+		  rho->data[index2] = TopSurfaceDoping * ChargeFactor;
+		}
+	      else
+		{
+		  rho->data[index2] = tr_background;
+		}
 	    }
 	}
     }
@@ -1635,7 +1645,7 @@ double MultiGrid::SOR_Inner(Array3D* phi, Array3D* rho, Array3D* elec, Array3D* 
 			}
 		      else
 			{
-			  if (phi->x[i] >= PixelRegionLowerLeft[0][0] && phi->x[i] <= PixelRegionUpperRight[0][0] && phi->y[j] >= PixelRegionLowerLeft[0][1] && phi->y[j] <= PixelRegionUpperRight[0][1] && phi->z[k] <= DoubleQFhZmax)
+			  if (phi->x[i] >= (PixelRegionLowerLeft[0][0] - DoubleQFhBuffer) && phi->x[i] <= (PixelRegionUpperRight[0][0] + DoubleQFhBuffer) && phi->y[j] >= (PixelRegionLowerLeft[0][1] - DoubleQFhBuffer) && phi->y[j] <= (PixelRegionUpperRight[0][1] + DoubleQFhBuffer) && phi->z[k] <= DoubleQFhZmax)
 			    {
 			      localQFh = qfh1;
 			    }

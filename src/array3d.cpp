@@ -144,38 +144,63 @@ double Array3D::DataInterpolate3D(double xin, double yin, double zin)
     }
 }
 
+// These have been reworked with a tanh function to have a fine grid at the top and bottom.
+
 double Array3D::ZP(double z)
 {
-  return - sensorthickness * (nzexp - 1.0) * pow(z / sensorthickness, (nzexp + 1.0)/nzexp) + nzexp * z;
+  if (nzexp < 1.01) return z;
+  else
+    {
+      double lam = 2.0 * acosh(sqrt(nzexp));
+      double tanlam = tanh(lam / 2.0);
+      double znorm = (2.0 * z / sensorthickness - 1.0) * tanlam;
+      return sensorthickness * (atanh(znorm) / lam + 0.5);
+    }
 }
 
 double Array3D::DZPDz(double z)
 {
-  if (z < 1.0E-6) return nzexp;
-  else return - (nzexp - 1.0) * (nzexp + 1.0) / nzexp * pow(z / sensorthickness, 1.0 / nzexp) + nzexp;
+  if ((z < 1.0E-6) || (nzexp < 1.01)) return nzexp;
+  else
+    {
+      double lam = 2.0 * acosh(sqrt(nzexp));
+      double tanlam = tanh(lam / 2.0);
+      double znorm = (2.0 * z / sensorthickness - 1.0) * tanlam;
+      return 2.0 * tanlam / lam / (1.0 - znorm * znorm);
+    }
 }
 
 double Array3D::D2ZPDz2(double z)
 {
-  if (z < 1.0E-6) return 0.0;
-  else return - (nzexp - 1.0) * (nzexp + 1.0) / (nzexp * nzexp) * pow(z / sensorthickness, 1.0 / nzexp - 1.0) / sensorthickness;
+  if ((z < 1.0E-6) || (nzexp < 1.01)) return 0.0;
+  else
+    {
+      double lam = 2.0 * acosh(sqrt(nzexp));
+      double tanlam = tanh(lam / 2.0);
+      double znorm = (2.0 * z / sensorthickness - 1.0) * tanlam;
+      double pre = 8.0 * znorm * tanlam * tanlam / lam / sensorthickness; 
+      return pre / ((1.0 - znorm * znorm) * (1.0 - znorm * znorm));
+    }
 }
 
 double Array3D::Z(double zp)
 
 // Inverts ZP(z) using Newton's method
 {
+  if (zp < 1.0E-6) return zp;
   int i = 0;
   double error = 1.0, lastroot = zp, newroot;
-  while (error>1e-12)
+  while (error>1e-9)
     {
       newroot = lastroot - (ZP(lastroot) - zp) / DZPDz(lastroot);
       error = fabs((newroot - lastroot) / lastroot);
       lastroot=newroot;
       i=i+1;
+      //if (zp < 0.04) printf("i=%d, zp=%.8f, newroot=%.8f,error=%.8f\n",i,zp,newroot,error);
       if (i > 100)
 	{
 	  printf("Iterations exceeded in Z(zprime). Quitting\n");
+	  //printf("i=%d, zp=%.2f, newroot=%.2f,error=%.2f\n",i,zp,newroot,error);	  
 	  return newroot;
 	}	  
     }

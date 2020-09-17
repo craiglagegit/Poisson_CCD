@@ -87,6 +87,7 @@ class MultiGrid
   double qfh1;           // Quasi-Fermi level near bottom
   int UseDoubleQFh;     // 0 - only 1 qfh, 1 - two values of qfh
   double DoubleQFhZmax; // In PixelRegion, below this value, qfh1 applies
+  double DoubleQFhBuffer; // Buffer around pixel region  
   double Ni;            // Intrinsic carrier concentration at operating temperature
   double ktq;           // kT/q
   double Vbb;		// Back bias
@@ -107,6 +108,8 @@ class MultiGrid
   double ChannelDoping;		// Channel doping
   double ChannelDepth;		// Channel depth in microns
   double BackgroundDoping; 	// Background doping
+  double TopSurfaceDoping;      // Doping of top surface
+  double TopDopingThickness;    // Thickness of top doping layer
   double* ChannelDose;		// Channel doping
   double* ChannelSigma;		// Channel depth in microns
   double* ChannelPeak;           // Depth of peak of channel implant below silicon surface in microns
