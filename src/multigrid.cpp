@@ -2000,7 +2000,7 @@ void MultiGrid::VCycle_Inner(Array3D** phi, Array3D** rho, Array3D** elec, Array
 	  WriteOutputFile(outputfiledir, outputfilebase+"_Multi_"+istepnum+"_"+StepNum, "phi", phi[i]);
 	  WriteOutputFile(outputfiledir, outputfilebase+"_Multi_"+istepnum+"_"+StepNum, "rho", rho[i]);
 	  WriteOutputFile(outputfiledir, outputfilebase+"_Multi_"+istepnum+"_"+StepNum, "Elec", elec[i]);
-	  WriteOutputFile(outputfiledir, outputfilebase+"_Multi_"+istepnum+"_"+StepNum, "Hole", elec[i]);
+	  WriteOutputFile(outputfiledir, outputfilebase+"_Multi_"+istepnum+"_"+StepNum, "Hole", hole[i]);
 	  if (VerboseLevel > 2)
 	    {
 	      WriteOutputFile(outputfiledir, outputfilebase+"_Multi_"+istepnum+"_"+StepNum, "eps", eps[i]);	  
