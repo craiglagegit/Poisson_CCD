@@ -1,1 +1,0 @@
-Electrons in Region = 0.0, Mean z = 0.000 microns
