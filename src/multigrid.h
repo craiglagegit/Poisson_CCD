@@ -83,80 +83,31 @@ class MultiGrid
   int YBCType;            // Free or periodic BC in Y-direction
 
   // Voltages and Charges
-  double qfh;           // Quasi-Fermi level in hole regions
-  double Ni;            // Intrinsic carrier concentration at operating temperature
-  double ktq;           // kT/q
-  double Vbb;		// Back bias
-  double Vparallel_lo;	// Parallel Low Voltage
-  double Vparallel_hi;	// Parallel High Voltage
+  double qfe;           // Quasi-Fermi level for electrons
+  double qfh;           // Quasi-Fermi level for holes
 
-  int Channelkmin;              // Bottom of channel region doping
-  int Channelkmax;              // Top of channel region doping
-  int ChannelStopkmin;          // Bottom of channel stop region doping
-  int ChannelStopkmax;          // Top of channel stop region doping
-  int ChannelProfile;           // 0 = Square well, N = N Gaussians
-  int ChannelStopProfile;       // 0 = Square well, N = N Gaussian
-  int ChannelStopDotProfile;    // 0 = Square well, N = N Gaussian
+  int Contactkmin;              // Bottom of contact region doping
+  int Contactkmax;              // Top of contact region doping
+  int ContactProfile;           // 0 = Square well, N = N Gaussians
 
-  double ChannelStopDoping;	// Channel Stop doping
-  double ChannelStopDepth;     	// Channel stop depth in microns
-  double ChannelStopSideDiff; 
-  double ChannelDoping;		// Channel doping
-  double ChannelDepth;		// Channel depth in microns
+  double ContactWidth;		// Contact region width
+  double ContactHeight;		// Contact region height
+  double ContactDoping;		// Contact doping
+  double ContactDepth;		// Contact depth in microns
   double BackgroundDoping; 	// Background doping
-  double* ChannelDose;		// Channel doping
-  double* ChannelSigma;		// Channel depth in microns
-  double* ChannelPeak;           // Depth of peak of channel implant below silicon surface in microns
-  double* ChannelStopDose;	// Channel Stop doping
-  double* ChannelStopSigma;     	// Channel stop depth in microns
-  double* ChannelStopPeak;       // Depth of peak of channel stop implant below silicon surface in microns
-  double ChannelStopWidth;     	// Channel stop width in microns
-  double ChannelStopSurfaceCharge;  // Channel stop surface charge in cm^-2
-  double ChannelSurfaceCharge;  // Channel surface charge in cm^-2
+  double* ContactDose;		// Contact doping
+  double* ContactSigma;		// Contact depth in microns
+  double* ContactPeak;           // Depth of peak of contact implant below silicon surface in microns
 
-  double ChannelStopDotCenter;  // Center of channel stop "Dots" above pixel bottom in microns
-  double ChannelStopDotHeight;  // Height of channel stop "Dots" in microns
-  double ChannelStopDotDoping;	// Square profile doping in cm^-2
-  double ChannelStopDotDepth;   // Square profile depth in microns
-  double* ChannelStopDotDose;   // Doping in cm^-2
-  double* ChannelStopDotPeak;   // Location of peak below silicon surface in microns
-  double* ChannelStopDotSigma;  // Sigma in microns
-  double ChannelStopDotSurfaceCharge;  // Surface charge density in cm^-2
-
-  double GateOxide;             // Gate oxide thickness in microns
-  double FieldOxide;            // Field oxide thickness in microns
-  double FieldOxideTaper;       // Field oxide taper width in microns
-  int NTaper0;                  // Field oxide taper in grid cells at finest grid
-  int NumPhases;             // Number of phases
-  int CollectingPhases;      // Number of collecting phases
-  double GateGap;            // Gap between gates in microns
-  
-  // Tree Ring Parameters
-  int AddTreeRings;              // 0 - No tree rings; 1 - Add tree rings
-  double TreeRingAngle;          // Rotation angle in  degrees
-  double TreeRingAmplitude;      // Amplitude in multiples of background charge
-  double TreeRingPeriod;         // Period of oscillations in microns
+  double BottomOxide;             // Bottom oxide thickness in microns
 
   // Pixel Regions
   int NumberofPixelRegions;	  	  // 
   double** PixelRegionLowerLeft;	  //
   double** PixelRegionUpperRight;	  //
-  int* NumberofFilledWells;		  //
-  int** CollectedCharge;		  // Collected charge in e-
-  double*** FilledPixelCoords;            // (x,y) coords of pixel center
-  double** ElectronCount;                 // Number of electrons in each filled pixel
-  double** PixelQFe;                      // QFe in each filled pixel
-
-  // QFe Look-up table and electron method
-  int ElectronMethod;        // 0 - Leave electrons where they land from tracking
-			     // 1 - Set QFe (QFe is always used in Fixed Regions)
-			     // 2 - Electron conservation and constant QFe
-  int BuildQFeLookup;        // 0 - No QFe lookup; 1 - Build QFeLookup
-  int NQFe;                  // Number of entries in QFELookup table             
-  double QFemin;             // Minimum QFe in table
-  double QFemax;             // Maximum QFe in table
-  double* QFeLookup;         // QFeLookup table
-
+  int* NumberofContactDeltaVs;		  //
+ double*** DeltaVPixelCoords;            // (x,y) coords of pixel center
+  double** DeltaV;                 // Voltage deviation in contact region
 
   // Constant Voltage Regions
   int NumberofFixedRegions;
@@ -201,10 +152,6 @@ class MultiGrid
   double Xoffset;
   double Yoffset;
 
-  // Fringe Parameters
-  double FringeAngle;          // Rotation angle in  degrees
-  double FringePeriod;         // Period of oscillations in microns
-
   // File I/O
   string outputfilebase; // Output filename base
   string outputfiledir; // Output filename directory
@@ -240,7 +187,6 @@ class MultiGrid
   void SaveGridMulti();  
   void SetInitialVoltages(Array3D*, Array3D*, Array2DInt*, Array2DInt*, Array2DInt*);
   void SetFixedCharges(Array3D*, Array2DInt*);
-  void FillElectronWells(Array3D*, Array3D*, Array2DInt*, double);  
   double SOR_Inner(Array3D*, Array3D*, Array3D*, Array3D*, Array3D*, Array2DInt*, Array2D*, Array2D*, Array2DInt*, Array2DInt*);
   double Error_Inner(Array3D*, Array3D*, Array3D*, Array3D*, Array3D*, Array2DInt*, Array2DInt*);
   void Prolongate(Array3D*, Array3D*, Array3D*, Array3D*, Array2DInt*, Array2DInt*, Array2DInt*);
@@ -252,7 +198,6 @@ class MultiGrid
   void Trace(double*, int, bool, double, ofstream&);
   void TraceSpot(int);
   void TraceList(int);        
-  void TraceFringes(int);  
   void TraceGrid(int);
   void TraceRegion(int);
   void TraceFe55Cloud(int);  
@@ -261,9 +206,7 @@ class MultiGrid
   void CalculatePixelAreas(int);
   double mu_Si (double, double);
   void Set_QFh(Array2D**);
-  void Adjust_QFe(Array2D**, Array3D**, Array2DInt**);
-  double ElectronQF(int, int);
-  void WriteQFeLookup(string, string, string);
+  void Set_QFe(Array2D**);
   void WriteCollectedCharge(string, string, string);  
   void ReadQFeLookup(string, string, string);
   void Setkmins(Array3D**, Array3D**, Array3D**, Array2DInt**, Array2DInt**);
