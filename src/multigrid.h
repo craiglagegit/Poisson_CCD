@@ -85,6 +85,8 @@ class MultiGrid
   // Voltages and Charges
   double qfe;           // Quasi-Fermi level for electrons
   double qfh;           // Quasi-Fermi level for holes
+  double Vbb;           // Backside voltage
+  double Vcontact;    // Nominal voltage at contact
 
   int Contactkmin;              // Bottom of contact region doping
   int Contactkmax;              // Top of contact region doping
@@ -95,6 +97,8 @@ class MultiGrid
   double ContactDoping;		// Contact doping
   double ContactDepth;		// Contact depth in microns
   double BackgroundDoping; 	// Background doping
+  double TopSurfaceDoping;      // Doping of top surface
+  double TopDopingThickness;    // Thickness of top doping layer
   double* ContactDose;		// Contact doping
   double* ContactSigma;		// Contact depth in microns
   double* ContactPeak;           // Depth of peak of contact implant below silicon surface in microns

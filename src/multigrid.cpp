@@ -236,25 +236,16 @@ MultiGrid::~MultiGrid() //Destructor
   delete[] Ckmin;
   delete[] Vkmin;
   delete[] SimulationRegionLowerLeft;
-  if (ChannelProfile > 0)
+  if (ContactProfile > 0)
     {
-      delete[] ChannelDose;
-      delete[] ChannelSigma;
-      delete[] ChannelPeak;      
-    }
-  if (ChannelStopProfile > 0)
-    {
-      delete[] ChannelStopDose;
-      delete[] ChannelStopSigma;
-      delete[] ChannelStopPeak;      
+      delete[] ContactDose;
+      delete[] ContactSigma;
+      delete[] ContactPeak;      
     }
   delete[] PixelBoundaryLowerLeft;
   delete[] PixelBoundaryUpperRight;
   delete[] PixelBoundaryStepSize;
-  if (ElectronMethod == 1)
-    {
-      delete[] QFeLookup;
-    }
+
   for (n=0; n<NumberofFixedRegions; n++)
     {
       delete FixedRegionLowerLeft[n];
@@ -272,28 +263,19 @@ MultiGrid::~MultiGrid() //Destructor
     {
       delete PixelRegionLowerLeft[n];
       delete PixelRegionUpperRight[n];
-      for (m=0; m<NumberofFilledWells[n]; m++)
+      for (m=0; m<NumberofContactDeltaVs[n]; m++)
 	{
-	  delete FilledPixelCoords[n][m];
+	  delete DeltaVPixelCoords[n][m];
 	}
-      delete[] FilledPixelCoords[n];
-      delete[] CollectedCharge[n];
-      delete[] ElectronCount[n];
-      if (ElectronMethod == 1)
-	{
-	  delete[] PixelQFe[n];
-	}
+      delete[] DeltaVPixelCoords[n];
+      delete[] DeltaV[n];
     }
-  delete[] NumberofFilledWells;
+  delete[] NumberofContactDeltaVs;
   delete[] PixelRegionLowerLeft;
   delete[] PixelRegionUpperRight;
-  delete[] FilledPixelCoords;
-  delete[] CollectedCharge;
-  delete[] ElectronCount;
-  if (ElectronMethod == 1)
-    {
-      delete[] PixelQFe;
-    }
+  delete[] DeltaVPixelCoords;
+  delete[] DeltaV;
+
   return;
 }
 
@@ -443,6 +425,7 @@ void MultiGrid::ReadConfigurationFile(string inname)
   printf("There will be %d total multi-grids\n",(nsteps+1));  
   // nsteps is the number of reduction steps in the Vcycle_Inner Cycle.
   qfh = GetDoubleParam(inname, "qfh", -100.0, VerboseLevel);
+  qfe = GetDoubleParam(inname, "qfe", -100.0, VerboseLevel);  
   // Poisson solver constants
   w = GetDoubleParam(inname, "w", 1.9, VerboseLevel);			// Successive Over-Relaxation factor
   ncycle = GetIntParam(inname, "ncycle", 100, VerboseLevel);		// Number of SOR cycles at each resolution
@@ -493,102 +476,32 @@ void MultiGrid::ReadConfigurationFile(string inname)
   SimulationRegionLowerLeft[0] = 0.0;  SimulationRegionLowerLeft[1] = 0.0;
   SimulationRegionLowerLeft = GetDoubleList(inname, "SimulationRegionLowerLeft", 2, SimulationRegionLowerLeft, VerboseLevel);
   // Voltages and Charges
-  Vbb = GetDoubleParam(inname, "Vbb", -50.0, VerboseLevel);		        // Back bias
-  Vparallel_lo = GetDoubleParam(inname, "Vparallel_lo", -8.0, VerboseLevel);	// Parallel Low Voltage
-  Vparallel_hi = GetDoubleParam(inname, "Vparallel_hi", 4.0, VerboseLevel);	// Parallel High Voltage
-  GateOxide = GetDoubleParam(inname, "GateOxide", 0.15, VerboseLevel);
-  FieldOxide = GetDoubleParam(inname, "FieldOxide", 0.40, VerboseLevel);
-  FieldOxideTaper = GetDoubleParam(inname, "FieldOxideTaper", 0.50, VerboseLevel);  
-  ChannelStopWidth = GetDoubleParam(inname, "ChannelStopWidth", 1.0, VerboseLevel);
+  Vbb = GetDoubleParam(inname, "Vbb", -4.0, VerboseLevel);		        // Back bias
+  Vcontact = GetDoubleParam(inname, "Vcontact", -2.0, VerboseLevel);	// Contact voltage
+  BottomOxide = GetDoubleParam(inname, "BottomOxide", 0.15, VerboseLevel);
   BackgroundDoping = GetDoubleParam(inname, "BackgroundDoping", -1.0E12, VerboseLevel);
-  ChannelSurfaceCharge = GetDoubleParam(inname, "ChannelSurfaceCharge", 0.0, VerboseLevel);
-  ChannelStopSurfaceCharge = GetDoubleParam(inname, "ChannelStopSurfaceCharge", 0.0, VerboseLevel);
-  ChannelStopSideDiff = GetDoubleParam(inname, "ChannelStopSideDiff", FieldOxideTaper, VerboseLevel);  
-  NumPhases = GetIntParam(inname, "NumPhases", 3, VerboseLevel);
-  CollectingPhases = GetIntParam(inname, "CollectingPhases", 1, VerboseLevel);
-  GateGap = GetDoubleParam(inname, "GateGap", 0.0, VerboseLevel);    
-  if(CollectingPhases > NumPhases)
-    {
-      printf("Cannot have more collecting phases than phases!  Quitting\n");
-      exit(0);
-    }
+  TopSurfaceDoping = GetDoubleParam(inname, "TopSurfaceDoping", -1.0E12, VerboseLevel);
+  TopDopingThickness = GetDoubleParam(inname, "TopDopingThickness", 0.0, VerboseLevel);
+
   string profilenum, regionnum;
-  ChannelProfile = GetIntParam(inname, "ChannelProfile", 0, VerboseLevel);
-  if (ChannelProfile == 0)
+  ContactProfile = GetIntParam(inname, "ContactProfile", 0, VerboseLevel);
+  if (ContactProfile == 0)
     {
-      ChannelDoping = GetDoubleParam(inname, "ChannelDoping", 5.0E11, VerboseLevel);
-      ChannelDepth = GetDoubleParam(inname, "ChannelDepth", 1.0, VerboseLevel);
+      ContactDoping = GetDoubleParam(inname, "ContactDoping", 5.0E11, VerboseLevel);
+      ContactDepth = GetDoubleParam(inname, "ContactDepth", 1.0, VerboseLevel);
     }
   else
     {
-      ChannelDose = new double[ChannelProfile];
-      ChannelSigma = new double[ChannelProfile];
-      ChannelPeak = new double[ChannelProfile];            
-      for (i=0; i<ChannelProfile; i++)
+      ContactDose = new double[ContactProfile];
+      ContactSigma = new double[ContactProfile];
+      ContactPeak = new double[ContactProfile];            
+      for (i=0; i<ContactProfile; i++)
 	{
 	  profilenum = std::to_string(i);
-	  ChannelDose[i] = GetDoubleParam(inname, "ChannelDose_"+profilenum, 5.0E11, VerboseLevel);
-	  ChannelSigma[i] = GetDoubleParam(inname, "ChannelSigma_"+profilenum, 0.5, VerboseLevel);
-	  ChannelPeak[i] = GetDoubleParam(inname, "ChannelPeak_"+profilenum, 0.0, VerboseLevel);	  
+	  ContactDose[i] = GetDoubleParam(inname, "ContactDose_"+profilenum, 5.0E11, VerboseLevel);
+	  ContactSigma[i] = GetDoubleParam(inname, "ContactSigma_"+profilenum, 0.5, VerboseLevel);
+	  ContactPeak[i] = GetDoubleParam(inname, "ContactPeak_"+profilenum, 0.0, VerboseLevel);	  
 	}
-    }
-  ChannelStopProfile = GetIntParam(inname, "ChannelStopProfile", 0, VerboseLevel);
-  if (ChannelStopProfile == 0)
-    {
-      ChannelStopDoping = GetDoubleParam(inname, "ChannelStopDoping", 5.0E11, VerboseLevel);
-      ChannelStopDepth = GetDoubleParam(inname, "ChannelStopDepth", 1.0, VerboseLevel);
-    }
-  else
-    {
-      ChannelStopDose = new double[ChannelStopProfile];
-      ChannelStopSigma = new double[ChannelStopProfile];
-      ChannelStopPeak = new double[ChannelStopProfile];            
-      for (i=0; i<ChannelStopProfile; i++)
-	{
-	  profilenum = std::to_string(i);
-	  ChannelStopDose[i] = GetDoubleParam(inname, "ChannelStopDose_"+profilenum, 5.0E11, VerboseLevel);
-	  ChannelStopSigma[i] = GetDoubleParam(inname, "ChannelStopSigma_"+profilenum, 0.5, VerboseLevel);
-	  ChannelStopPeak[i] = GetDoubleParam(inname, "ChannelStopPeak_"+profilenum, 0.0, VerboseLevel);	  
-	}
-    }
-  // Channel Stop "Dots", if used
-  ChannelStopDotHeight = GetDoubleParam(inname, "ChannelStopDotHeight", 0.0, VerboseLevel);    
-  if (ChannelStopDotHeight > 0.001)
-    {
-      ChannelStopDotCenter = GetDoubleParam(inname, "ChannelStopDotCenter", 5.0, VerboseLevel);  
-      ChannelStopDotSurfaceCharge = GetDoubleParam(inname, "ChannelStopDotSurfaceCharge", 0.0, VerboseLevel);
-      ChannelStopDotProfile = GetIntParam(inname, "ChannelStopDotProfile", 0, VerboseLevel);
-      if (ChannelStopDotProfile == 0)
-	{
-	  ChannelStopDotDoping = GetDoubleParam(inname, "ChannelStopDotDoping", 5.0E11, VerboseLevel);
-	  ChannelStopDotDepth = GetDoubleParam(inname, "ChannelStopDotDepth", 1.0, VerboseLevel);
-	}
-      else
-	{
-	  ChannelStopDotDose = new double[ChannelStopDotProfile];
-	  ChannelStopDotSigma = new double[ChannelStopDotProfile];
-	  ChannelStopDotPeak = new double[ChannelStopDotProfile];            
-	  for (i=0; i<ChannelStopDotProfile; i++)
-	    {
-	      profilenum = std::to_string(i);
-	      ChannelStopDotDose[i] = GetDoubleParam(inname, "ChannelStopDotDose_"+profilenum, 5.0E11, VerboseLevel);
-	      ChannelStopDotSigma[i] = GetDoubleParam(inname, "ChannelStopDotSigma_"+profilenum, 0.5, VerboseLevel);
-	      ChannelStopDotPeak[i] = GetDoubleParam(inname, "ChannelStopDotPeak_"+profilenum, 0.0, VerboseLevel);	  
-	    }
-	}
-    }
-  AddTreeRings = GetIntParam(inname, "AddTreeRings", 0, VerboseLevel);
-  if (AddTreeRings == 1)
-    {
-      TreeRingAngle = GetDoubleParam(inname, "TreeRingAngle", 0.0, VerboseLevel);	  
-      TreeRingAmplitude = GetDoubleParam(inname, "TreeRingAmplitude", 0.0, VerboseLevel);	  
-      TreeRingPeriod = GetDoubleParam(inname, "TreeRingPeriod", 0.0, VerboseLevel);	  
-    }
-  else
-    {
-      TreeRingAngle = 0.0;
-      TreeRingAmplitude = 0.0;
-      TreeRingPeriod = 100.0;
     }
   
   // Continuations
@@ -608,7 +521,6 @@ void MultiGrid::ReadConfigurationFile(string inname)
   BottomSteps = GetIntParam(inname, "BottomSteps", 1000, VerboseLevel);
   NumVertices = GetIntParam(inname,"NumVertices",2, VerboseLevel);
   CalculateZ0 = GetIntParam(inname,"CalculateZ0",0, VerboseLevel);
-  ElectronMethod = GetIntParam(inname,"ElectronMethod",0, VerboseLevel);    
   ElectronZ0Fill = GetDoubleParam(inname,"ElectronZ0Fill",100.0, VerboseLevel);
   ElectronZ0Area = GetDoubleParam(inname,"ElectronZ0Area",100.0, VerboseLevel);
   LogEField = GetIntParam(inname, "LogEField", 0, VerboseLevel);
@@ -624,19 +536,8 @@ void MultiGrid::ReadConfigurationFile(string inname)
       string fillednum;
       PixelRegionLowerLeft = new double*[NumberofPixelRegions];
       PixelRegionUpperRight = new double*[NumberofPixelRegions];
-      NumberofFilledWells = new int[NumberofPixelRegions];
-      FilledPixelCoords = new double**[NumberofPixelRegions];
-      CollectedCharge = new int*[NumberofPixelRegions];
-      ElectronCount = new double*[NumberofPixelRegions];
-      if (ElectronMethod == 1)
-	{
-	  BuildQFeLookup = GetIntParam(inname, "BuildQFeLookup", 0, VerboseLevel);
-	  NQFe = GetIntParam(inname, "NQFe", 81, VerboseLevel);
-	  QFemin = GetDoubleParam(inname, "QFemin", 5.0, VerboseLevel);
-	  QFemax = GetDoubleParam(inname, "QFemax", 10.0, VerboseLevel);
-	  QFeLookup = new double[NQFe * (nsteps + 1)];
-	  PixelQFe = new double*[NumberofPixelRegions];
-	}
+      NumberofContactDeltaVs = new int[NumberofPixelRegions];
+      DeltaVPixelCoords = new double**[NumberofPixelRegions];
       for (i=0; i<NumberofPixelRegions; i++)
 	{
 	  PixelRegionLowerLeft[i] = new double[2];
@@ -684,14 +585,6 @@ void MultiGrid::ReadConfigurationFile(string inname)
 	{
 	  NumElec = GetIntParam(inname, "NumElec", 1000, VerboseLevel);
 	}
-      if (PixelBoundaryTestType == 3)
-	{
-	  NumElec = GetIntParam(inname, "NumElec", 1000, VerboseLevel);	  
-	  FringeAngle = GetDoubleParam(inname, "FringeAngle", 0.0, VerboseLevel);	  
-	  FringePeriod = GetDoubleParam(inname, "FringePeriod", 0.0, VerboseLevel);	  
-	  Xoffset = GetDoubleParam(inname, "Xoffset", 0.0, VerboseLevel);
-	  Yoffset = GetDoubleParam(inname, "Yoffset", 0.0, VerboseLevel);
-	}
       if (PixelBoundaryTestType == 6)
 	{
 	  NumElec = GetIntParam(inname, "NumElec", 1620, VerboseLevel);
@@ -702,93 +595,19 @@ void MultiGrid::ReadConfigurationFile(string inname)
       
       for (i=0; i<NumberofPixelRegions; i++)
 	{
-	  int NewNumberofFilledWells;
-	  PixelBoundaryInsideThisPixelRegion = false;
 	  regionnum = std::to_string(i);
-	  PixelRegionLowerLeft[i] = GetDoubleList(inname, "PixelRegionLowerLeft_"+regionnum, 2, PixelRegionLowerLeft[i], VerboseLevel);
-	  PixelRegionUpperRight[i] = GetDoubleList(inname, "PixelRegionUpperRight_"+regionnum, 2, PixelRegionUpperRight[i], VerboseLevel);
-	  NumberofFilledWells[i] = GetIntParam(inname, "NumberofFilledWells_"+regionnum, 0, VerboseLevel);
-	  NewNumberofFilledWells = NumberofFilledWells[i];
-	  // Will reduce number of filled wells if some are inside PixelBoundary
-	  if ((PixelBoundaryLowerLeft[0] >= PixelRegionLowerLeft[i][0]) && (PixelBoundaryLowerLeft[1] >= PixelRegionLowerLeft[i][1]) && (PixelBoundaryUpperRight[0] <= PixelRegionUpperRight[i][0]) && (PixelBoundaryUpperRight[1] <= PixelRegionUpperRight[i][1]))
+	  NumberofContactDeltaVs[i] = GetIntParam(inname, "NumberofContactDeltaVs_"+regionnum, 0, VerboseLevel);
+	  
+	  DeltaV[i] = new int[NumberofContactDeltaVs[i]];
+	  DeltaVPixelCoords[i] = new double*[NumberofContactDeltaVs[i]];
+	  DeltaV[i] = new double[NumberofContactDeltaVs[i]];
+	  for (j<0; j<NumberofContactDeltaVs[i]; j++)
 	    {
-	      PixelBoundaryInsideAnyPixelRegion = true;
-	      PixelBoundaryInsideThisPixelRegion = true;
-	      NumberofFilledWells[i] += PixelBoundaryNx * PixelBoundaryNy;
-	      // PixelBoundary added to number of wells filled in .cfg file.
-	      // Use first PixelBoundaryNx * PixelBoundaryNy locations for PixelBoundary tests,
-	      // then any cells filled in .cfg file which are outside pixel boundary
-	      NewNumberofFilledWells = NumberofFilledWells[i];
-	      // Will reduce number of filled wells if some are inside PixelBoundary
-	      if (VerboseLevel >2) printf("In ReadConfig. NewNumberofFilledWells = %d\n",NewNumberofFilledWells);
+	      fillednum = std::to_string(j);
+	      DeltaV[i][j] = GetIntParam(inname,"DeltaV_"+regionnum+"_"+fillednum,0, VerboseLevel);
+	      DeltaVPixelCoords[i][j] = GetDoubleList(inname, "DeltaVPixelCoords_"+regionnum+"_"+fillednum, 2, DeltaVPixelCoords[i][j], VerboseLevel);
 	    }
-	  CollectedCharge[i] = new int[NumberofFilledWells[i]];
-	  FilledPixelCoords[i] = new double*[NumberofFilledWells[i]];
-	  ElectronCount[i] = new double[NumberofFilledWells[i] * (nsteps + 1)];
-	  if (ElectronMethod == 1)
-	    {
-	      PixelQFe[i] = new double[NumberofFilledWells[i] * (nsteps + 1)];
-	    }
-	  for (j=0; j<NumberofFilledWells[i]; j++)
-	    {
-	      int PixX, PixY;
-	      PixX = j % PixelBoundaryNx;
-	      PixY = (j - PixX) / PixelBoundaryNx;
-	      for (n=0; n<nsteps+1; n++)
-		{
-		  ElectronCount[i][n*NumberofFilledWells[i]+j] = 0.0;
-		  if (ElectronMethod == 1)
-		    {
-		      PixelQFe[i][n*NumberofFilledWells[i]+j] = 100.0;
-		    }
-		}
-	      FilledPixelCoords[i][j] = new double[2];
-	      for (k=0; k<2; k++)
-		{
-		  FilledPixelCoords[i][j][k] = 0.0;
-		}
-	      if (!PixelBoundaryInsideThisPixelRegion)
-		{
-		  fillednum = std::to_string(j);
-		  CollectedCharge[i][j] = GetIntParam(inname,"CollectedCharge_"+regionnum+"_"+fillednum,0, VerboseLevel);
-		  FilledPixelCoords[i][j] = GetDoubleList(inname, "FilledPixelCoords_"+regionnum+"_"+fillednum, 2, FilledPixelCoords[i][j], VerboseLevel);
-		}
-	      else
-		{
-		  if (j < PixelBoundaryNx * PixelBoundaryNy)
-		    {
-		      CollectedCharge[i][j] = 0.0;
-		      FilledPixelCoords[i][j][0] = PixelBoundaryLowerLeft[0] + ((double)PixX + 0.5) * PixelSizeX;  
-		      FilledPixelCoords[i][j][1] = PixelBoundaryLowerLeft[1] + ((double)PixY + 0.5) * PixelSizeY;   		    
-		    }
-		  else
-		    {
-		      fillednum = std::to_string(j -  PixelBoundaryNx * PixelBoundaryNy);
-		      CollectedCharge[i][j] = GetIntParam(inname,"CollectedCharge_"+regionnum+"_"+fillednum,0, VerboseLevel);
-		      FilledPixelCoords[i][j] = GetDoubleList(inname, "FilledPixelCoords_"+regionnum+"_"+fillednum, 2, FilledPixelCoords[i][j], VerboseLevel);
-		      // Check if this is inside the PixelRegion
-		      if ((FilledPixelCoords[i][j][0] >= PixelBoundaryLowerLeft[0]) && (FilledPixelCoords[i][j][1] >= PixelBoundaryLowerLeft[1]) && (FilledPixelCoords[i][j][0] <= PixelBoundaryUpperRight[0]) && (FilledPixelCoords[i][j][1] <= PixelBoundaryUpperRight[1]))
-			{
-			  // This pixel is inside the pixel boundary.  Delete it from the list and move the charge to the appropriate pixel
-			  NewNumberofFilledWells -= 1;
-			  PixX = (int)floor((FilledPixelCoords[i][j][0] - PixelBoundaryLowerLeft[0]) / PixelSizeX);
-			  PixY = (int)floor((FilledPixelCoords[i][j][1] - PixelBoundaryLowerLeft[1]) / PixelSizeY);
-			  jj = PixX + PixelBoundaryNx * PixY;
-			  CollectedCharge[i][jj] = CollectedCharge[i][j];
-			  CollectedCharge[i][j] = 0.0;
-			  if (VerboseLevel >2) printf("In ReadConfig. PixX = %d, PixY = %d, jj = %d, NewNumberofFilledWells = %d\n",PixX, PixY, jj, NewNumberofFilledWells);
-			}
-		    }
-		}
-	    }
-	  NumberofFilledWells[i] = NewNumberofFilledWells;
 	}
-      if(!PixelBoundaryInsideAnyPixelRegion)
-	{
-	  printf("Pixel Boundary not Inside any Pixel Region!!!  This may cause errors!!!\n");
-	  //exit(0);
-	}
-    }
   if (PixelBoundaryTestType == 5)
     {
       NumElec = GetIntParam(inname, "NumElec", 1000, VerboseLevel);      
@@ -1128,19 +947,22 @@ void MultiGrid::SetFixedCharges(Array3D* rho, Array2DInt* Ckmin)
   int NLeft, NRight, NTaper, LastCS, LastC;
   // ChargeFactor converts doping in cm^-3 into the code units
   // Set the background charge:
-  double tr_xprime, tr_background;
   for (i=0; i<rho->nx; i++)
     {
       for (j=0; j<rho->ny; j++)
 	{
 	  index = i + j * rho->nx;
-	  tr_xprime = rho->x[i] * cos(TreeRingAngle * pi / 180.0) + rho->y[j] * sin(TreeRingAngle * pi / 180.0);
-	  tr_background = BackgroundDoping * ChargeFactor * (1.0 + TreeRingAmplitude * cos(tr_xprime / TreeRingPeriod));
-	  //if (rho->nz == 161 && rho->y[j] == 80) printf("i = %d, rho = %f\n",i,tr_background);
 	  for (k=Ckmin->data[index]; k<rho->nz-1; k++)
 	    {
 	      index2 = index + k * rho->nx * rho->ny;
-	      rho->data[index2] = tr_background;
+	      if (rho->z[k] > (SensorThickness - TopDopingThickness))
+		{
+		  rho->data[index2] = TopSurfaceDoping * ChargeFactor;
+		}
+	      else
+		{
+		  rho->data[index2] = BackgroundDoping * ChargeFactor;
+		}
 	    }
 	}
     }
@@ -3144,7 +2966,7 @@ void MultiGrid::Set_QFe(Array2D** QFe)
   // Now count the electrons in the pixel regions.
   for (m=0; m<NumberofPixelRegions; m++)
     {
-      for (q=0; q<NumberofFilledWells[m]; q++)
+      for (q=0; q<NumberofContactDeltaVs[m]; q++)
 	{
 	  // First figure out the pixel coordinates
 	  PixX = (int)floor((FilledPixelCoords[m][q][0] - PixelRegionLowerLeft[m][0]) / PixelSizeX);
@@ -3160,7 +2982,7 @@ void MultiGrid::Set_QFe(Array2D** QFe)
 	      jmin = elec[n]->YIndex(PixYmin);
 	      jmax = elec[n]->YIndex(PixYmax);
 	      // Then count how many electrons currently in the pixel
-	      ElectronCount[m][n * NumberofFilledWells[m] + q] = 0.0;
+	      ElectronCount[m][n * NumberofContactDeltaVs[m] + q] = 0.0;
 	      for (i=imin; i<imax; i++)
 		{
 		  for (j=jmin; j<jmax; j++)
@@ -3169,7 +2991,7 @@ void MultiGrid::Set_QFe(Array2D** QFe)
 		      for (k=Ckmin[n]->data[index]; k<elec[n]->nz; k++)
 			{
 			  index2 = index + k * elec[n]->nx * elec[n]->ny;
-			  ElectronCount[m][n * NumberofFilledWells[m] + q] += elec[n]->data[index2];
+			  ElectronCount[m][n * NumberofContactDeltaVs[m] + q] += elec[n]->data[index2];
 			  TotalElectrons +=  elec[n]->data[index2];
 			  if (BuildQFeLookup == 1)
 			    {
@@ -3179,25 +3001,25 @@ void MultiGrid::Set_QFe(Array2D** QFe)
 		    }
 		}
 
-	      if (VerboseLevel > 2) printf("In Adjust_QFe. n = %d,m=%d,q=%d,PixX = %.1f, Pixy = %.1f, Desired Electrons = %d, ElecCount = %.4f, QFe = %.4f\n",n,m,q,FilledPixelCoords[m][q][0], FilledPixelCoords[m][q][1], CollectedCharge[m][q], ElectronCount[m][n*NumberofFilledWells[m]+q], PixelQFe[m][n*NumberofFilledWells[m]+q]);
+	      if (VerboseLevel > 2) printf("In Adjust_QFe. n = %d,m=%d,q=%d,PixX = %.1f, Pixy = %.1f, Desired Electrons = %d, ElecCount = %.4f, QFe = %.4f\n",n,m,q,FilledPixelCoords[m][q][0], FilledPixelCoords[m][q][1], CollectedCharge[m][q], ElectronCount[m][n*NumberofContactDeltaVs[m]+q], PixelQFe[m][n*NumberofContactDeltaVs[m]+q]);
 	      if (BuildQFeLookup == 1)
 		{
-		  PixelQFe[m][n * NumberofFilledWells[m] + q] = QFemin + (QFemax - QFemin) / (double)NQFe * (double)q;
-		  QFeLookup[n * NumberofFilledWells[m] + q] = ElectronCount[m][n * NumberofFilledWells[m] + q];
-		  if (VerboseLevel > 2) printf("In Adjust_QFe. PixX = %.1f, Pixy = %.1f, ElecCount = %.4f, QFe = %.4f\n",FilledPixelCoords[m][q][0], FilledPixelCoords[m][q][1], ElectronCount[m][n*NumberofFilledWells[m]+q], PixelQFe[m][n*NumberofFilledWells[m]+q]);
+		  PixelQFe[m][n * NumberofContactDeltaVs[m] + q] = QFemin + (QFemax - QFemin) / (double)NQFe * (double)q;
+		  QFeLookup[n * NumberofContactDeltaVs[m] + q] = ElectronCount[m][n * NumberofContactDeltaVs[m] + q];
+		  if (VerboseLevel > 2) printf("In Adjust_QFe. PixX = %.1f, Pixy = %.1f, ElecCount = %.4f, QFe = %.4f\n",FilledPixelCoords[m][q][0], FilledPixelCoords[m][q][1], ElectronCount[m][n*NumberofContactDeltaVs[m]+q], PixelQFe[m][n*NumberofContactDeltaVs[m]+q]);
 		}
 	      else
 		{
-		  PixelQFe[m][n * NumberofFilledWells[m] + q] = ElectronQF(CollectedCharge[m][q], n);
+		  PixelQFe[m][n * NumberofContactDeltaVs[m] + q] = ElectronQF(CollectedCharge[m][q], n);
 		}
-	      if (VerboseLevel > 2) printf("In Adjust_QFe. n=%d,m=%d,q=%d,PixX = %.1f, Pixy = %.1f, Desired Electrons = %d, ElecCount = %.4f, QFe = %.4f\n",n,m,q,FilledPixelCoords[m][q][0], FilledPixelCoords[m][q][1], CollectedCharge[m][q], ElectronCount[m][n * NumberofFilledWells[m] + q], PixelQFe[m][n * NumberofFilledWells[m] + q]);  
+	      if (VerboseLevel > 2) printf("In Adjust_QFe. n=%d,m=%d,q=%d,PixX = %.1f, Pixy = %.1f, Desired Electrons = %d, ElecCount = %.4f, QFe = %.4f\n",n,m,q,FilledPixelCoords[m][q][0], FilledPixelCoords[m][q][1], CollectedCharge[m][q], ElectronCount[m][n * NumberofContactDeltaVs[m] + q], PixelQFe[m][n * NumberofContactDeltaVs[m] + q]);  
 	      // Now set pixel QFe to calculated value
 	      for (i=imin; i<imax; i++)
 		{
 		  for (j=jmin; j<jmax; j++)
 		    {
 		      index = i + j * QFe[n]->nx;
-		      QFe[n]->data[index] = PixelQFe[m][n * NumberofFilledWells[m] + q];
+		      QFe[n]->data[index] = PixelQFe[m][n * NumberofContactDeltaVs[m] + q];
 		    }
 		}
 	    }
