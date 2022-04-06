@@ -54,8 +54,6 @@ MultiGrid::MultiGrid(string inname) //Constructor
   printf("Finished Building Arrays. \n");
   //CountCharges(rho, elec, hole);  
   Setkmins(rho, Ckmin, Vkmin);
-  Channelkmin = rho[0]->ChannelCkmin;
-  ChannelStopkmin = rho[0]->ChannelStopCkmin;
   for (n=0; n<nsteps+1; n++)
     {
       SetInitialVoltages(phi[n], BCType[n], Vkmin[n], Ckmin[n]);
@@ -372,10 +370,10 @@ void MultiGrid::ReadPhotonList(string outputfiledir, string name)
 
 void MultiGrid::ReadConfigurationFile(string inname)
 {
+  int i, j;
   VerboseLevel = GetIntParam(inname, "VerboseLevel", 1, 2); // 0 - minimal output, 1 - normal, 2 - more verbose.
   outputfilebase  = GetStringParam(inname,"outputfilebase", "Test", VerboseLevel); //Output filename base
   outputfiledir  = GetStringParam(inname,"outputfiledir", "data", VerboseLevel); //Output filename directory
-  int i, j, k, n, jj;
   ScaleFactor =  GetIntParam(inname, "ScaleFactor", 1, VerboseLevel);     // Power of 2 that sets the grid size
   // ScaleFactor = 1 means grid size is 5/6 micron, 128 grids in the z-direction
   nsteps = 2 + (int)(log2(ScaleFactor));  
@@ -404,19 +402,6 @@ void MultiGrid::ReadConfigurationFile(string inname)
   GridsPerPixelY = GridsPerPixelY * ScaleFactor;
   GridSpacingY = PixelSizeY / (double)GridsPerPixelY;
 
-  if (PixelSizeX < 0.0)
-    {
-      // This is for backward compatibility with square only pixels
-      PixelSizeX = GetDoubleParam(inname, "PixelSize", 10.0, VerboseLevel);    // Pixel size in microns
-      PixelSizeY = GetDoubleParam(inname, "PixelSize", 10.0, VerboseLevel);    // Pixel size in microns      
-      GridsPerPixelX = GetIntParam(inname, "GridsPerPixel", 12, VerboseLevel); // Grids per pixel at ScaleFactor = 1
-      GridsPerPixelX = GridsPerPixelX * ScaleFactor;
-      GridSpacingX = PixelSizeX / (double)GridsPerPixelX;
-      GridsPerPixelY = GetIntParam(inname, "GridsPerPixel", 12, VerboseLevel); // Grids per pixel at ScaleFactor = 1
-      GridsPerPixelY = GridsPerPixelY * ScaleFactor;
-      GridSpacingY = PixelSizeY / (double)GridsPerPixelY;
-
-    }
   SensorThickness = GetDoubleParam(inname, "SensorThickness", 100.0, VerboseLevel);    // Sensor Thickness in microns  
 
   Nx = GetIntParam(inname, "Nx", 160, VerboseLevel);                // Number of grids in x at ScaleFactor = 1
@@ -489,7 +474,6 @@ void MultiGrid::ReadConfigurationFile(string inname)
   NumberofPixelRegions = GetIntParam(inname, "NumberofPixelRegions", 0, VerboseLevel);
   if (NumberofPixelRegions > 0)
     {
-      bool PixelBoundaryInsideAnyPixelRegion = false, PixelBoundaryInsideThisPixelRegion;
       string fillednum;
       PixelRegionLowerLeft = new double*[NumberofPixelRegions];
       PixelRegionUpperRight = new double*[NumberofPixelRegions];
@@ -555,10 +539,9 @@ void MultiGrid::ReadConfigurationFile(string inname)
 	  regionnum = std::to_string(i);
 	  NumberofContactDeltaVs[i] = GetIntParam(inname, "NumberofContactDeltaVs_"+regionnum, 0, VerboseLevel);
 	  
-	  DeltaV[i] = new int[NumberofContactDeltaVs[i]];
 	  DeltaVPixelCoords[i] = new double*[NumberofContactDeltaVs[i]];
 	  DeltaV[i] = new double[NumberofContactDeltaVs[i]];
-	  for (j<0; j<NumberofContactDeltaVs[i]; j++)
+	  for (j=0; j<NumberofContactDeltaVs[i]; j++)
 	    {
 	      fillednum = std::to_string(j);
 	      DeltaV[i][j] = GetIntParam(inname,"DeltaV_"+regionnum+"_"+fillednum,0, VerboseLevel);
@@ -579,8 +562,10 @@ void MultiGrid::ReadConfigurationFile(string inname)
 	  ReadPhotonList(outputfiledir, PhotonList);
 	}
     }
-
+    }//?? Not sure this is in the right place!!!
   // Fixed Voltage Regions
+  // Commenting out
+  /*
   NumberofFixedRegions = GetIntParam(inname, "NumberofFixedRegions", 0, VerboseLevel);
   FixedRegionLowerLeft = new double*[NumberofFixedRegions];
   FixedRegionUpperRight = new double*[NumberofFixedRegions];
@@ -653,7 +638,7 @@ void MultiGrid::ReadConfigurationFile(string inname)
         filter_input.close();
       }
     }
-
+  */
   return;
 }
 
@@ -737,7 +722,7 @@ void MultiGrid::SetInitialVoltages(Array3D* phi, Array2DInt* BCType, Array2DInt*
 {
   // This sets up the initial voltages on the boundaries
   int i, j, k, m, index;
-  int PixY, PixY;
+  int PixX, PixY;
   double PixXmin, PixYmin, ContactXmin, ContactXmax, ContactYmin, ContactYmax;
   
   for (i=0; i<phi->nx; i++)
@@ -2628,7 +2613,7 @@ void MultiGrid::Set_QFh(Array2D** QFh)
   */
   fflush(stdout);
   return;
-  }
+}
 
 void MultiGrid::Set_QFe(Array2D** QFe)
 {

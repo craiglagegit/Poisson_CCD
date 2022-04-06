@@ -4,7 +4,7 @@
 # 23-Oct-19
 #############################################################################
 
-HDF5_DIR     = /home/cslage/Software/hdf5-1.8.14
+HDF5_DIR     = /usr/local/Cellar/hdf5/1.12.1
 
 ####### Compiler, tools and options
 

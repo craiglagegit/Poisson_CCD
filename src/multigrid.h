@@ -85,6 +85,8 @@ class MultiGrid
   double qfe;           // Quasi-Fermi level for electrons
   double qfh;           // Quasi-Fermi level for holes
   double Vbb;           // Backside voltage
+  double Ni;            // Intrinsic carrier concentration at operating temperature
+  double ktq;           // kT/q
   double Vcontact;    // Nominal voltage at contact
 
   int Contactkmin;              // Bottom of contact region doping
@@ -185,15 +187,15 @@ class MultiGrid
   // Methods
   void ReadConfigurationFile(string);
   void ReadPhotonList(string, string);
-  void BuildArrays(Array3D**, Array3D**, Array3D**, Array3D**, Array3D**, Array3D**, Array2DInt**, Array2D**, Array2D**, Array2DInt**, Array2DInt**);
+  void BuildArrays(Array3D**, Array3D**, Array3D**, Array3D**, Array3D**, Array2DInt**, Array2D**, Array2D**, Array2DInt**, Array2DInt**);
   void SaveGrid();
   void SaveGridMulti();  
-  void SetInitialVoltages(Array3D*, Array3D*, Array2DInt*, Array2DInt*, Array2DInt*);
+  void SetInitialVoltages(Array3D*, Array2DInt*, Array2DInt*, Array2DInt*);
   void SetFixedCharges(Array3D*, Array2DInt*);
   double SOR_Inner(Array3D*, Array3D*, Array3D*, Array3D*, Array3D*, Array2DInt*, Array2D*, Array2D*, Array2DInt*, Array2DInt*);
   double Error_Inner(Array3D*, Array3D*, Array3D*, Array3D*, Array3D*, Array2DInt*, Array2DInt*);
   void Prolongate(Array3D*, Array3D*, Array3D*, Array3D*, Array2DInt*, Array2DInt*, Array2DInt*);
-  void VCycle_Inner(Array3D**, Array3D**, Array3D**, Array3D**, Array3D**, Array2DInt**, Array2D**, Array2D**, Array2DInt**, Array2DInt**, int, int);
+  void VCycle_Inner(Array3D**, Array3D**, Array3D**, Array3D**, Array2DInt**, Array2D**, Array2D**, Array2DInt**, Array2DInt**, int, int);
   void WriteOutputFile(string, string, string, Array3D*);
   void ReadOutputFile(string, string, string, Array3D*);
   void Gradient(Array3D*, Array3D**);
@@ -212,7 +214,7 @@ class MultiGrid
   void Set_QFe(Array2D**);
   void WriteCollectedCharge(string, string, string);  
   void ReadQFeLookup(string, string, string);
-  void Setkmins(Array3D**, Array3D**, Array2DInt**, Array2DInt**);
+  void Setkmins(Array3D**, Array2DInt**, Array2DInt**);
   void CountCharges(Array3D**, Array3D**, Array3D**);
   void Write3DFile(string, string, string, Array3D*);
   void Write2DFile(string, string, string, Array2D*);
