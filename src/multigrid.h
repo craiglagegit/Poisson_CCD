@@ -217,5 +217,5 @@ class MultiGrid
   void Write3DFile(string, string, string, Array3D*);
   void Write2DFile(string, string, string, Array2D*);
   void Write2DIntFile(string, string, string, Array2DInt*);
-  void SetCharge(Array3D*, Array2DInt*, int, int, int, double);
+  void SetCharge(Array3D*, Array2DInt*, int, int, int);
 };
