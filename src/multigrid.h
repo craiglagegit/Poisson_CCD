@@ -57,6 +57,7 @@ class MultiGrid
   int iterations;	// Number of VCycles
   int Seed;             // Pseudo-random number generator seed
   double NZExp;		// Non-linear z axis exponent
+  int ElectronMethod;             // Electron method (not really used here)  
   
   int ScaleFactor;       // Power of 2 that sets the grid size
   double PixelSizeX;      // Pixel size in microns
@@ -190,10 +191,10 @@ class MultiGrid
   void BuildArrays(Array3D**, Array3D**, Array3D**, Array3D**, Array3D**, Array2DInt**, Array2D**, Array2D**, Array2DInt**, Array2DInt**);
   void SaveGrid();
   void SaveGridMulti();  
-  void SetInitialVoltages(Array3D*, Array2DInt*, Array2DInt*, Array2DInt*);
+  void SetInitialVoltages(Array3D*, Array2DInt*, Array2DInt*);
   void SetFixedCharges(Array3D*, Array2DInt*);
-  double SOR_Inner(Array3D*, Array3D*, Array3D*, Array3D*, Array3D*, Array2DInt*, Array2D*, Array2D*, Array2DInt*, Array2DInt*);
-  double Error_Inner(Array3D*, Array3D*, Array3D*, Array3D*, Array3D*, Array2DInt*, Array2DInt*);
+  double SOR_Inner(Array3D*, Array3D*, Array3D*, Array3D*, Array2DInt*, Array2D*, Array2D*, Array2DInt*, Array2DInt*);
+  double Error_Inner(Array3D*, Array3D*, Array3D*, Array3D*, Array2DInt*, Array2DInt*);
   void Prolongate(Array3D*, Array3D*, Array3D*, Array3D*, Array2DInt*, Array2DInt*, Array2DInt*);
   void VCycle_Inner(Array3D**, Array3D**, Array3D**, Array3D**, Array2DInt**, Array2D**, Array2D**, Array2DInt**, Array2DInt**, int, int);
   void WriteOutputFile(string, string, string, Array3D*);
@@ -205,7 +206,7 @@ class MultiGrid
   void TraceList(int);        
   void TraceGrid(int);
   void TraceRegion(int);
-  void TraceFe55Cloud(int);  
+  //void TraceFe55Cloud(int);  
   void FindEdge(double*, double, ofstream&);
   void FindCorner(double*, double*, ofstream&);
   void CalculatePixelAreas(int);

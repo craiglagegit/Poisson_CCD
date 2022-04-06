@@ -4,7 +4,7 @@
 # 23-Oct-19
 #############################################################################
 
-HDF5_DIR     = /usr/local/Cellar/hdf5/1.12.1
+HDF5_DIR     = /usr/local/Cellar/hdf5/1.12.1_1
 
 ####### Compiler, tools and options
 

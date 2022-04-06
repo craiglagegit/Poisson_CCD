@@ -56,7 +56,7 @@ MultiGrid::MultiGrid(string inname) //Constructor
   Setkmins(rho, Ckmin, Vkmin);
   for (n=0; n<nsteps+1; n++)
     {
-      SetInitialVoltages(phi[n], BCType[n], Vkmin[n], Ckmin[n]);
+      SetInitialVoltages(phi[n], BCType[n], Vkmin[n]);
       SetFixedCharges(rho[n], Ckmin[n]); // Place fixed charges
     }
   Set_QFh(QFh); // Set hole Quasi-Fermi level
@@ -115,7 +115,7 @@ MultiGrid::MultiGrid(string inname) //Constructor
 	      Write2DIntFile(outputfiledir, outputfilebase+underscore+StepNum, "Vkmin", Vkmin[0]);
 	      Write2DIntFile(outputfiledir, outputfilebase+underscore+StepNum, "Ckmin", Ckmin[0]);
 	    }
-	      if(LogEField > 0)
+	  if(LogEField > 0)
 	    {
 	      
 	      WriteOutputFile(outputfiledir, outputfilebase+underscore+StepNum, "Ex", E[0]);
@@ -134,7 +134,7 @@ MultiGrid::MultiGrid(string inname) //Constructor
 	  if (PixelBoundaryTestType == 1)
 	    {
 	      TraceSpot(m);
-	      WriteCollectedCharge(outputfiledir, outputfilebase+underscore+StepNum, "CC");
+	      //WriteCollectedCharge(outputfiledir, outputfilebase+underscore+StepNum, "CC");
 	    }
 	  if (PixelBoundaryTestType == 2 || PixelBoundaryTestType == 4)
 	    {
@@ -143,11 +143,15 @@ MultiGrid::MultiGrid(string inname) //Constructor
 	  if (PixelBoundaryTestType == 5)
 	    {
 	      TraceList(m);
-	      WriteCollectedCharge(outputfiledir, outputfilebase+underscore+StepNum, "CC");		    }
+	      //WriteCollectedCharge(outputfiledir, outputfilebase+underscore+StepNum, "CC");		   
+	    }
+	  /*
 	  if (PixelBoundaryTestType == 6)
 	    {
 	      TraceFe55Cloud(m);
-	      WriteCollectedCharge(outputfiledir, outputfilebase+underscore+StepNum, "CC");		    }
+	      //WriteCollectedCharge(outputfiledir, outputfilebase+underscore+StepNum, "CC");
+	    }
+	  */
 	  // Calculate pixel areas after tracing electrons, if requested.
 	  if (PixelAreas >= 0 && (m % PixelAreas) == 0)
 	    {
@@ -387,7 +391,7 @@ void MultiGrid::ReadConfigurationFile(string inname)
   iterations =  GetIntParam(inname, "iterations", 1, VerboseLevel);	// Number of VCycles
   Seed =  GetIntParam(inname, "Seed", 77, VerboseLevel);	// Seed
   NZExp = GetDoubleParam(inname, "NZExp", 10.0, VerboseLevel);        // Non-linear z axis exponent
-  
+  ElectronMethod = 1;
   // Overall setup
   NumSteps = GetIntParam(inname, "NumSteps", 100, VerboseLevel);
   SaveData =  GetIntParam(inname, "SaveData", 1, VerboseLevel);     // 0 - Save only Pts, N save phi,rho,E every Nth step
@@ -548,6 +552,7 @@ void MultiGrid::ReadConfigurationFile(string inname)
 	      DeltaVPixelCoords[i][j] = GetDoubleList(inname, "DeltaVPixelCoords_"+regionnum+"_"+fillednum, 2, DeltaVPixelCoords[i][j], VerboseLevel);
 	    }
 	}
+    }
   if (PixelBoundaryTestType == 5)
     {
       NumElec = GetIntParam(inname, "NumElec", 1000, VerboseLevel);      
@@ -562,7 +567,7 @@ void MultiGrid::ReadConfigurationFile(string inname)
 	  ReadPhotonList(outputfiledir, PhotonList);
 	}
     }
-    }//?? Not sure this is in the right place!!!
+  //}//?? Not sure this is in the right place!!!
   // Fixed Voltage Regions
   // Commenting out
   /*
@@ -639,7 +644,7 @@ void MultiGrid::ReadConfigurationFile(string inname)
       }
     }
   */
-  return;
+   return;
 }
 
 void MultiGrid::BuildArrays(Array3D** phi, Array3D** rho, Array3D** elec, Array3D** hole, Array3D** E, Array2DInt** BCType, Array2D** QFe, Array2D** QFh, Array2DInt** Ckmin, Array2DInt** Vkmin)
@@ -718,10 +723,10 @@ void MultiGrid::BuildArrays(Array3D** phi, Array3D** rho, Array3D** elec, Array3
   return;
 }
 
-void MultiGrid::SetInitialVoltages(Array3D* phi, Array2DInt* BCType, Array2DInt* Vkmin, Array2DInt* Ckmin)
+void MultiGrid::SetInitialVoltages(Array3D* phi, Array2DInt* BCType, Array2DInt* Vkmin)
 {
   // This sets up the initial voltages on the boundaries
-  int i, j, k, m, index;
+  int i, j, m, index, index2;
   int PixX, PixY;
   double PixXmin, PixYmin, ContactXmin, ContactXmax, ContactYmin, ContactYmax;
   
@@ -760,7 +765,8 @@ void MultiGrid::SetInitialVoltages(Array3D* phi, Array2DInt* BCType, Array2DInt*
 	      if (phi->x[i] >= ContactXmin && phi->x[i] <= ContactXmax && phi->y[j] >= ContactYmin && phi->y[j] <= ContactYmax)
 		{
 		  // In contact region
-		  phi->data[index] = ContactVoltage;
+		  index2 = index + Vkmin->data[index]  * phi->nx * phi->ny;
+		  phi->data[index2] = Vcontact;
 		  BCType->data[index] = 0;
 		}
 	      else
@@ -813,9 +819,10 @@ void MultiGrid::SetInitialVoltages(Array3D* phi, Array2DInt* BCType, Array2DInt*
 void MultiGrid::SetFixedCharges(Array3D* rho, Array2DInt* Ckmin)
 {
   // This sets the fixed lattice charges
-  int i, j, k, n, index, index2, PixX, PixY;
+  int i, j, k, m, index, index2, PixX, PixY;
   double PixXmin, PixYmin, ChargeFactor = (QE*MICRON_PER_M/(EPSILON_0*EPSILON_SI)) / pow(MICRON_PER_CM, 3);
-  // ChargeFactor converts doping in cm^-3 into the code units
+  double ContactXmin, ContactXmax, ContactYmin, ContactYmax;
+// ChargeFactor converts doping in cm^-3 into the code units
   // Set the background charge:
   for (i=0; i<rho->nx; i++)
     {
@@ -838,7 +845,7 @@ void MultiGrid::SetFixedCharges(Array3D* rho, Array2DInt* Ckmin)
     }
   // Charges in Pixel Regions
 
-  for (n=0; n<NumberofPixelRegions; n++)
+  for (m=0; m<NumberofPixelRegions; m++)
     {
       for (i=0; i<rho->nx; i++)
 	{
@@ -1367,7 +1374,6 @@ void MultiGrid::VCycle_Inner(Array3D** phi, Array3D** rho, Array3D** elec, Array
   // It does a given number of steps (niter) at each scale  as it moves to finer and finer scales.
   int i, j, niter, NumSOR;
   double error = 100.0, AveIterations;
-  bool PixelsFilled = false;  // Stores whether the pixels have been filled with electrons in ElectronMethod = 2
   for (i=stepstart; i>-1; i--)
     {
       niter = ncycle * (int)pow(4,i);      
@@ -1628,8 +1634,8 @@ void MultiGrid::Trace(double* point, int bottomsteps, bool savecharge, double bo
   double mu, E2, Emag, ve, vth, tau, Tscatt;
   double theta, phiangle, zmin, zmax, zbottom;
   zmax = SensorThickness;
-  zmin = E[0]->z[Channelkmin] + 2.0 * FieldOxide; // Roughly the top of the collection region
-  zbottom = E[0]->zmz[Channelkmin] + 0.01;
+  zmin = ContactDepth;
+  zbottom = 0.0;
   double*  E_interp = new double[3];
   E2 = 0.0;
   for (i=0; i<3; i++)
@@ -1705,6 +1711,7 @@ void MultiGrid::Trace(double* point, int bottomsteps, bool savecharge, double bo
 	    {
 	      break; // Electron recombines if it encounters free holes.
 	    }
+	  /*
 	  if (savecharge && ElectronMethod != 0)
 	    {
 	      // Find the pixel the charge is in and add 1 electron to it.
@@ -1714,7 +1721,7 @@ void MultiGrid::Trace(double* point, int bottomsteps, bool savecharge, double bo
 	      if (j >= 0 && j < PixelBoundaryNx * PixelBoundaryNy)   CollectedCharge[0][j] += 1;
 	      phase = 4;
 	      break;
-	    }
+	      }*/
 	  if (i > 0 && i < elec[0]->nx-1 && j > 0 && j < elec[0]->ny-1 && k < elec[0]->nz-1 && savecharge && ElectronMethod == 0)
 	    {
 	      elec[0]->data[i + j * elec[0]->nx + k * elec[0]->nx * elec[0]->ny] += bottomcharge;// Add bottomcharge to this grid cell
@@ -1816,7 +1823,8 @@ void MultiGrid::TraceSpot(int m)
   return;
 }
 
-
+/*
+Commenting this out for now
 void MultiGrid::TraceFe55Cloud(int m)
 {
   // This generates an Fe55 charge cloud and traces all electrons in the cloud
@@ -2106,7 +2114,7 @@ void MultiGrid::TraceFe55Cloud(int m)
   delete[] r;  
   return;
 }
-
+*/
 void MultiGrid::TraceList(int m)
 {
   // This runs a list of photons from a list
@@ -2114,7 +2122,7 @@ void MultiGrid::TraceList(int m)
   fflush(stdout);
 
   double x, y, z, zbottom, xcenter, ycenter, abs_length, path_length;
-  zbottom = E[0]->zmz[Channelkmin] + 0.01;
+  zbottom = 0.0;
   int n, nlist;
   double bottomcharge = 1.0 / (double)BottomSteps;
   double* point = new double[3];
@@ -2577,7 +2585,7 @@ double MultiGrid::mu_Si (double E,double T)
 void MultiGrid::Set_QFh(Array2D** QFh)
 {
   //Set hole quasi-Fermi level in the region.
-  int i, j, m, n, index;
+  int i, j, n, index;
   for (n=0; n<nsteps+1; n++)
     {
       for (i=0; i<QFh[n]->nx; i++)
@@ -2618,7 +2626,7 @@ void MultiGrid::Set_QFh(Array2D** QFh)
 void MultiGrid::Set_QFe(Array2D** QFe)
 {
   //Set hole quasi-Fermi level in the region.
-  int i, j, m, n, index;
+  int i, j, n, index;
   for (n=0; n<nsteps+1; n++)
     {
       for (i=0; i<QFe[n]->nx; i++)
@@ -2663,7 +2671,7 @@ void MultiGrid::Setkmins(Array3D** rho, Array2DInt** Ckmin, Array2DInt** Vkmin)
   // Vkmin is the lowest z location where the potential is updated.
   // Ckmin is the lowest z location where charges can accumulate.
   // Between Ckmin and Vkmin is the oxide region.
-  int i, j, k, m, n, index, PixX, PixY;
+  int i, j, m, n, index, PixX, PixY;
   double PixXmin, PixYmin, ContactXmin, ContactXmax, ContactYmin, ContactYmax;
   // Set Ckmin and Vkmin in pixel region.
   for (m=0; m<NumberofPixelRegions; m++)
@@ -2871,11 +2879,11 @@ void MultiGrid::SetCharge(Array3D* rho, Array2DInt* Ckmin, int i, int j, int reg
 	      Sigma = ContactSigma[m];
 	      Peak = ContactPeak[m];	      
 	      Dose = ContactDose[m];
-	      Qss = ContactSurfaceCharge;
+	      Qss = 0.0;//ContactSurfaceCharge;
 	    }
 	  if (VerboseLevel > 2 && i == rho->nx/2 && j == rho->ny/2) Sum = 0.0;
 	  kmax = rho->ZIndex(rho->z[Ckmin->data[index]] + 4.0 * Sigma + Peak);
-	  Charge =  Dose * MICRON_PER_CM  * ChargeFactor * TaperRatio;
+	  Charge =  Dose * MICRON_PER_CM  * ChargeFactor;// * TaperRatio;
 	  Zmin = rho->zmz[Ckmin->data[index]];
 	  Zmax = rho->zpz[kmax];
 	  Total = erf((Zmax - Zmin - Peak) / (sqrt(2.0) * Sigma)) + erf(Peak / (sqrt(2.0) * Sigma));
