@@ -44,7 +44,6 @@ class MultiGrid
   Array3D** E;        // Electric field
   Array3D** elec;      // Number of stored electrons
   Array3D** hole;      // Number of mobile holes
-  Array3D** eps;      // Dielectric constant array    
   Array2DInt** BCType;      // BCType - 0->fixed potential; 1->Enormal = 0
   Array2D** QFe;         // Electron Quasi-Fermi level
   Array2D** QFh;         // Hole Quasi-Fermi level  
@@ -213,7 +212,7 @@ class MultiGrid
   void Set_QFe(Array2D**);
   void WriteCollectedCharge(string, string, string);  
   void ReadQFeLookup(string, string, string);
-  void Setkmins(Array3D**, Array3D**, Array3D**, Array2DInt**, Array2DInt**);
+  void Setkmins(Array3D**, Array3D**, Array2DInt**, Array2DInt**);
   void CountCharges(Array3D**, Array3D**, Array3D**);
   void Write3DFile(string, string, string, Array3D*);
   void Write2DFile(string, string, string, Array2D*);
