@@ -393,7 +393,7 @@ void MultiGrid::ReadConfigurationFile(string inname)
   iterations =  GetIntParam(inname, "iterations", 1, VerboseLevel);	// Number of VCycles
   Seed =  GetIntParam(inname, "Seed", 77, VerboseLevel);	// Seed
   NZExp = GetDoubleParam(inname, "NZExp", 10.0, VerboseLevel);        // Non-linear z axis exponent
-  ElectronMethod = 1;
+  ElectronMethod = 2;
   // Overall setup
   NumSteps = GetIntParam(inname, "NumSteps", 100, VerboseLevel);
   SaveData =  GetIntParam(inname, "SaveData", 1, VerboseLevel);     // 0 - Save only Pts, N save phi,rho,E every Nth step
@@ -770,7 +770,7 @@ void MultiGrid::SetInitialVoltages(Array3D* phi, Array2DInt* BCType, Array2DInt*
 	      if (phi->x[i] >= ContactXmin && phi->x[i] <= ContactXmax && phi->y[j] >= ContactYmin && phi->y[j] <= ContactYmax)
 		{
 		  // In contact region
-		  index2 = index + Vkmin->data[index]  * phi->nx * phi->ny;
+		  index2 = index + Vkmin->data[index] * phi->nx * phi->ny;
 		  phi->data[index2] = Vcontact;
 		  BCType->data[index] = 0;
 		}
@@ -2707,8 +2707,8 @@ void MultiGrid::Setkmins(Array3D** rho, Array2DInt** Ckmin, Array2DInt** Vkmin)
 		  if (rho[n]->x[i] >= ContactXmin && rho[n]->x[i] <= ContactXmax && rho[n]->y[j] >= ContactYmin && rho[n]->y[j] <= ContactYmax)
 		    {
 		      // In contact region
-		      Ckmin[n]->data[index] = 0.0;
-		      Vkmin[n]->data[index] = 0.0;
+		      Ckmin[n]->data[index] = 0;
+		      Vkmin[n]->data[index] = 0;
 		    }
 		  else
 		    {
