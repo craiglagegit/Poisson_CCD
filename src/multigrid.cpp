@@ -44,6 +44,7 @@ MultiGrid::MultiGrid(string inname) //Constructor
   E = new Array3D*[3];
 
   BuildArrays(phi, rho, elec, hole, E, BCType, QFe, QFh, Ckmin, Vkmin);
+
   // Save coordinate grid along each axis.
   SaveGrid();
   // If requested, the loop below saves the grids for all scales
@@ -61,6 +62,7 @@ MultiGrid::MultiGrid(string inname) //Constructor
     }
   Set_QFh(QFh); // Set hole Quasi-Fermi level
   Set_QFe(QFe); // Set electron Quasi-Fermi level  
+
   time2 = time(NULL);
   setup_time = difftime(time2, time1);
   printf("Finished Setting ICs. Setup time = %.3f seconds.\n",setup_time);
@@ -374,7 +376,7 @@ void MultiGrid::ReadPhotonList(string outputfiledir, string name)
 
 void MultiGrid::ReadConfigurationFile(string inname)
 {
-  int i, j;
+  int i, j, k;
   VerboseLevel = GetIntParam(inname, "VerboseLevel", 1, 2); // 0 - minimal output, 1 - normal, 2 - more verbose.
   outputfilebase  = GetStringParam(inname,"outputfilebase", "Test", VerboseLevel); //Output filename base
   outputfiledir  = GetStringParam(inname,"outputfiledir", "data", VerboseLevel); //Output filename directory
@@ -482,6 +484,7 @@ void MultiGrid::ReadConfigurationFile(string inname)
       PixelRegionLowerLeft = new double*[NumberofPixelRegions];
       PixelRegionUpperRight = new double*[NumberofPixelRegions];
       NumberofContactDeltaVs = new int[NumberofPixelRegions];
+      DeltaV = new double*[NumberofPixelRegions];      
       DeltaVPixelCoords = new double**[NumberofPixelRegions];
       for (i=0; i<NumberofPixelRegions; i++)
 	{
@@ -493,7 +496,6 @@ void MultiGrid::ReadConfigurationFile(string inname)
 	      PixelRegionUpperRight[i][j] = 100.0;
 	    }
 	}
-      
       // Pixel Boundary Tests
       PixelBoundaryTestType = GetIntParam(inname, "PixelBoundaryTestType", 0, VerboseLevel);
       PixelBoundaryLowerLeft = new double(2);
@@ -537,18 +539,21 @@ void MultiGrid::ReadConfigurationFile(string inname)
 	  Fe55ElectronMult = GetDoubleParam(inname, "Fe55ElectronMult", 1.0, VerboseLevel);
 	  Fe55HoleMult = GetDoubleParam(inname, "Fe55HoleMult", 1.0, VerboseLevel);	  	  
 	}
-      
       for (i=0; i<NumberofPixelRegions; i++)
 	{
 	  regionnum = std::to_string(i);
 	  NumberofContactDeltaVs[i] = GetIntParam(inname, "NumberofContactDeltaVs_"+regionnum, 0, VerboseLevel);
-	  
 	  DeltaVPixelCoords[i] = new double*[NumberofContactDeltaVs[i]];
 	  DeltaV[i] = new double[NumberofContactDeltaVs[i]];
 	  for (j=0; j<NumberofContactDeltaVs[i]; j++)
 	    {
 	      fillednum = std::to_string(j);
-	      DeltaV[i][j] = GetIntParam(inname,"DeltaV_"+regionnum+"_"+fillednum,0, VerboseLevel);
+	      DeltaV[i][j] = GetDoubleParam(inname,"DeltaV_"+regionnum+"_"+fillednum,0, VerboseLevel);
+	      DeltaVPixelCoords[i][j] = new double[2];
+	      for (k=0; k<2; k++)
+		{
+		  DeltaVPixelCoords[i][j][k] = 0.0;
+		}
 	      DeltaVPixelCoords[i][j] = GetDoubleList(inname, "DeltaVPixelCoords_"+regionnum+"_"+fillednum, 2, DeltaVPixelCoords[i][j], VerboseLevel);
 	    }
 	}
@@ -644,7 +649,7 @@ void MultiGrid::ReadConfigurationFile(string inname)
       }
     }
   */
-   return;
+  return;
 }
 
 void MultiGrid::BuildArrays(Array3D** phi, Array3D** rho, Array3D** elec, Array3D** hole, Array3D** E, Array2DInt** BCType, Array2D** QFe, Array2D** QFh, Array2DInt** Ckmin, Array2DInt** Vkmin)

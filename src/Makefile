@@ -4,7 +4,7 @@
 # 23-Oct-19
 #############################################################################
 
-HDF5_DIR     = /usr/local/Cellar/hdf5/1.12.1_1
+HDF5_DIR     = /home/cslage/Software/hdf5-1.8.14
 
 ####### Compiler, tools and options
 
@@ -12,10 +12,10 @@ CC            = gcc
 CXX           = g++
 CFLAGS        = -pipe -O2 -Wall -W
 CXXFLAGS      = -pipe -O2 -Wall -W
-INCPATH       =  -I.
+INCPATH       =  -I.  -I$(HDF5_DIR)/include
 LINK          = g++
 LFLAGS        =
-LIBS          = -lm -lz -lhdf5 -lhdf5_cpp -lpthread
+LIBS          = -L$(HDF5_DIR)/lib -lm -lz -lhdf5 -lhdf5_cpp -lpthread
 
 ####### Output directory
 
