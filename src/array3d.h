@@ -23,7 +23,6 @@ class Array3D //This packages the 3D data sets
   int nx, ny, nz;
   double xmin, xmax, ymin, ymax, zmin, zmax, dx, dy, dzp, nzexp, *x, *y, *z, *zp, *zpz, *zmz, *zw, *zplus, *zminus, *dzpdz, *data;
   double sensorthickness;
-  int ChannelCkmin, ChannelStopCkmin, ChannelVkmin, ChannelStopVkmin;
   Array3D() {};
   Array3D(double, double, int, double, double, int, double, double, int, double, double);
   ~Array3D();

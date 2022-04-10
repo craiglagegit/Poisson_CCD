@@ -36,7 +36,6 @@ MultiGrid::MultiGrid(string inname) //Constructor
   rho = new Array3D*[nsteps+1];
   elec = new Array3D*[nsteps+1];
   hole = new Array3D*[nsteps+1];
-  eps = new Array3D*[nsteps+1];
   BCType = new Array2DInt*[nsteps+1];
   QFe = new Array2D*[nsteps+1];
   QFh = new Array2D*[nsteps+1];
@@ -44,7 +43,8 @@ MultiGrid::MultiGrid(string inname) //Constructor
   Vkmin = new Array2DInt*[nsteps+1];
   E = new Array3D*[3];
 
-  BuildArrays(phi, rho, elec, hole, eps, E, BCType, QFe, QFh, Ckmin, Vkmin);
+  BuildArrays(phi, rho, elec, hole, E, BCType, QFe, QFh, Ckmin, Vkmin);
+
   // Save coordinate grid along each axis.
   SaveGrid();
   // If requested, the loop below saves the grids for all scales
@@ -54,39 +54,19 @@ MultiGrid::MultiGrid(string inname) //Constructor
     }
   printf("Finished Building Arrays. \n");
   //CountCharges(rho, elec, hole);  
-  Setkmins(rho, phi, eps, Ckmin, Vkmin);
-  Channelkmin = rho[0]->ChannelCkmin;
-  ChannelStopkmin = rho[0]->ChannelStopCkmin;
+  Setkmins(rho, Ckmin, Vkmin);
   for (n=0; n<nsteps+1; n++)
     {
-      SetInitialVoltages(phi[n], eps[n], BCType[n], Vkmin[n], Ckmin[n]);
+      SetInitialVoltages(phi[n], BCType[n], Vkmin[n]);
       SetFixedCharges(rho[n], Ckmin[n]); // Place fixed charges
     }
   Set_QFh(QFh); // Set hole Quasi-Fermi level
+  Set_QFe(QFe); // Set electron Quasi-Fermi level  
+
   time2 = time(NULL);
   setup_time = difftime(time2, time1);
   printf("Finished Setting ICs. Setup time = %.3f seconds.\n",setup_time);
   fflush(stdout);
-  if (NumberofPixelRegions > 0 && ElectronMethod == 1)
-    {
-      if (BuildQFeLookup == 1)
-	{
-	  printf("Building QFe Lookup table\n");
-	  Adjust_QFe(QFe, elec, Ckmin);
-	  VCycle_Inner(phi, rho, elec, hole, eps, BCType, QFe, QFh, Ckmin, Vkmin, 0, nsteps);
-	  Adjust_QFe(QFe, elec, Ckmin);        
-	  WriteQFeLookup(outputfiledir, outputfilebase, "QFe");
-	  StepNum = std::to_string(999);      
-	  WriteOutputFile(outputfiledir, outputfilebase+underscore+StepNum, "Elec", elec[0]);
-	  WriteOutputFile(outputfiledir, outputfilebase+underscore+StepNum, "Hole", hole[0]);
-	  BuildQFeLookup = 0;
-	}
-      else
-	{
-	  ReadQFeLookup(outputfiledir, outputfilebase, "QFe");
-	}
-    }
-  Adjust_QFe(QFe, elec, Ckmin); // Set QFe	  	    
   // Now we run NumSteps cycle, adding NumElec electrons each step and re-solving
   // Poisson's equation at each step.
   // If a Continuation is requested, we read in the existing results and start
@@ -106,22 +86,7 @@ MultiGrid::MultiGrid(string inname) //Constructor
       // Now we cycle through the VCycles to solve Poisson's equation
       for (int n=0; n<iterations; n++)
 	{
-          printf("--- Starting VCycle %d / %d of step %d / %d.\n",
-            n + 1, iterations, m + 1, NumSteps);
-	  if (ElectronMethod == 1)
-	    {
-	      Adjust_QFe(QFe, elec, Ckmin); // Set QFe	  	  
-	    }
-	  if (ElectronMethod == 0 && m > 0)
-	    {
-	      // In this case, only iterate at the finest grid.
-	      VCycle_Inner(phi, rho, elec, hole, eps, BCType, QFe, QFh, Ckmin, Vkmin, m, 0);
-	    }
-	  else
-	    {
-	      VCycle_Inner(phi, rho, elec, hole, eps, BCType, QFe, QFh, Ckmin, Vkmin, m, nsteps);
-	    }
-	  //CountCharges(rho, elec, hole);
+	  VCycle_Inner(phi, rho, elec, hole, BCType, QFe, QFh, Ckmin, Vkmin, m, nsteps);
 	}
       StepNum = std::to_string(m);
       time2 = time(NULL);
@@ -146,14 +111,13 @@ MultiGrid::MultiGrid(string inname) //Constructor
 	  WriteOutputFile(outputfiledir, outputfilebase+underscore+StepNum, "rho", rho[0]);
 	  if (VerboseLevel > 2)
 	    {
-	      WriteOutputFile(outputfiledir, outputfilebase+underscore+StepNum, "eps", eps[0]);	  
 	      Write2DFile(outputfiledir, outputfilebase+underscore+StepNum, "QFe", QFe[0]);
 	      Write2DFile(outputfiledir, outputfilebase+underscore+StepNum, "QFh", QFh[0]);
 	      Write2DIntFile(outputfiledir, outputfilebase+underscore+StepNum, "BCType", BCType[0]);
 	      Write2DIntFile(outputfiledir, outputfilebase+underscore+StepNum, "Vkmin", Vkmin[0]);
 	      Write2DIntFile(outputfiledir, outputfilebase+underscore+StepNum, "Ckmin", Ckmin[0]);
 	    }
-	      if(LogEField > 0)
+	  if(LogEField > 0)
 	    {
 	      
 	      WriteOutputFile(outputfiledir, outputfilebase+underscore+StepNum, "Ex", E[0]);
@@ -172,25 +136,24 @@ MultiGrid::MultiGrid(string inname) //Constructor
 	  if (PixelBoundaryTestType == 1)
 	    {
 	      TraceSpot(m);
-	      WriteCollectedCharge(outputfiledir, outputfilebase+underscore+StepNum, "CC");
+	      //WriteCollectedCharge(outputfiledir, outputfilebase+underscore+StepNum, "CC");
 	    }
 	  if (PixelBoundaryTestType == 2 || PixelBoundaryTestType == 4)
 	    {
 	      TraceRegion(m);
 	    }
-	  if (PixelBoundaryTestType == 3)
-	    {
-	      TraceFringes(m);
-	      WriteCollectedCharge(outputfiledir, outputfilebase+underscore+StepNum, "CC");
-	    }
 	  if (PixelBoundaryTestType == 5)
 	    {
 	      TraceList(m);
-	      WriteCollectedCharge(outputfiledir, outputfilebase+underscore+StepNum, "CC");		    }
+	      //WriteCollectedCharge(outputfiledir, outputfilebase+underscore+StepNum, "CC");		   
+	    }
+	  /*
 	  if (PixelBoundaryTestType == 6)
 	    {
 	      TraceFe55Cloud(m);
-	      WriteCollectedCharge(outputfiledir, outputfilebase+underscore+StepNum, "CC");		    }
+	      //WriteCollectedCharge(outputfiledir, outputfilebase+underscore+StepNum, "CC");
+	    }
+	  */
 	  // Calculate pixel areas after tracing electrons, if requested.
 	  if (PixelAreas >= 0 && (m % PixelAreas) == 0)
 	    {
@@ -213,7 +176,6 @@ MultiGrid::~MultiGrid() //Destructor
       delete rho[n];
       delete elec[n];
       delete hole[n];
-      delete eps[n];            
       delete BCType[n];
       delete QFe[n];
       delete QFh[n];                  
@@ -229,32 +191,22 @@ MultiGrid::~MultiGrid() //Destructor
   delete[] rho;
   delete[] elec;
   delete[] hole;
-  delete[] eps;
   delete[] BCType;
   delete[] QFe;
   delete[] QFh;
   delete[] Ckmin;
   delete[] Vkmin;
   delete[] SimulationRegionLowerLeft;
-  if (ChannelProfile > 0)
+  if (ContactProfile > 0)
     {
-      delete[] ChannelDose;
-      delete[] ChannelSigma;
-      delete[] ChannelPeak;      
-    }
-  if (ChannelStopProfile > 0)
-    {
-      delete[] ChannelStopDose;
-      delete[] ChannelStopSigma;
-      delete[] ChannelStopPeak;      
+      delete[] ContactDose;
+      delete[] ContactSigma;
+      delete[] ContactPeak;      
     }
   delete[] PixelBoundaryLowerLeft;
   delete[] PixelBoundaryUpperRight;
   delete[] PixelBoundaryStepSize;
-  if (ElectronMethod == 1)
-    {
-      delete[] QFeLookup;
-    }
+
   for (n=0; n<NumberofFixedRegions; n++)
     {
       delete FixedRegionLowerLeft[n];
@@ -272,28 +224,19 @@ MultiGrid::~MultiGrid() //Destructor
     {
       delete PixelRegionLowerLeft[n];
       delete PixelRegionUpperRight[n];
-      for (m=0; m<NumberofFilledWells[n]; m++)
+      for (m=0; m<NumberofContactDeltaVs[n]; m++)
 	{
-	  delete FilledPixelCoords[n][m];
+	  delete DeltaVPixelCoords[n][m];
 	}
-      delete[] FilledPixelCoords[n];
-      delete[] CollectedCharge[n];
-      delete[] ElectronCount[n];
-      if (ElectronMethod == 1)
-	{
-	  delete[] PixelQFe[n];
-	}
+      delete[] DeltaVPixelCoords[n];
+      delete[] DeltaV[n];
     }
-  delete[] NumberofFilledWells;
+  delete[] NumberofContactDeltaVs;
   delete[] PixelRegionLowerLeft;
   delete[] PixelRegionUpperRight;
-  delete[] FilledPixelCoords;
-  delete[] CollectedCharge;
-  delete[] ElectronCount;
-  if (ElectronMethod == 1)
-    {
-      delete[] PixelQFe;
-    }
+  delete[] DeltaVPixelCoords;
+  delete[] DeltaV;
+
   return;
 }
 
@@ -431,121 +374,26 @@ void MultiGrid::ReadPhotonList(string outputfiledir, string name)
 }
 
 
-void MultiGrid::WriteQFeLookup(string outputfiledir, string filenamebase, string name)
-{
-  // This writes the QFeLookup file
-  int i, n;
-  double qf, dqf;
-  dqf = (QFemax - QFemin) / ((double)NQFe - 1.0);
-  string underscore = "_", slash = "/", filename, step;
-  filename = outputfiledir+slash+filenamebase+underscore+name+".dat";
-  ofstream qf_out(filename.c_str());
-  qf_out << setw(16) << "QFe" ;
-  for (n=0; n<nsteps+1; n++)
-    {
-      qf_out << setw(16) << "Ne("+ std::to_string(n)+")";
-    }
-  qf_out << endl;	 
-  for (i=0; i<NQFe; i++)
-    {
-      qf = QFemin + dqf * (double)i;
-      qf_out << setw(16) << qf ;
-      for (n=0; n<nsteps+1; n++)
-	{
-	  qf_out << setw(16) << QFeLookup[n * NQFe + i];
-	}
-        qf_out << endl;	 
-    }
-  qf_out.close();
-  printf("File %s successfully written\n", filename.c_str());
-}
-
-void MultiGrid::ReadQFeLookup(string outputfiledir, string filenamebase, string name)
-{
-  // This reads the QFeLookup file
-  int n, i = 0, success = 0;
-  double qfin, dqf, qfcalc, ne;
-  dqf = (QFemax - QFemin) / ((double)NQFe - 1.0);  
-  string line, underscore = "_", slash = "/", filename;
-  filename = outputfiledir+slash+filenamebase+underscore+name+".dat";
-  ifstream qf_in(filename.c_str());
-  if (qf_in.is_open())
-    {
-      getline (qf_in,line); // First line is labels      
-      while (!qf_in.eof())
-	{
-	  getline (qf_in,line);
-	  istringstream iss(line);
-	  if (VerboseLevel > 2) printf("In ReadQFeLookup. Line %d = %s\n",i,line.c_str());
-	  iss >> qfin;
-	  qfcalc = QFemin + dqf * (double)i;
-	  if (VerboseLevel > 2) printf("In ReadQFeLookup. Line %d. qfin = %f, qfcalc = %f\n",i,qfin, qfcalc);
-	  if (fabs(qfcalc - qfin) > 1.0E-4) break; // error	  
-	  for (n=0; n<nsteps+1; n++)
-	    {
-	      iss >> ne;
-	      QFeLookup[n * NQFe + i] = ne;
-	    }
-	  i += 1;
-	}
-      if (i == NQFe) success = 1;
-    }
-  qf_in.close();
-  if (success == 1)
-    {
-      printf("File %s successfully read\n", filename.c_str());
-      return;
-    }
-  else
-    {
-      printf("Problem reading file %s. Quitting\n", filename.c_str());
-      exit(0);
-    }
-}
-
-
-void MultiGrid::WriteCollectedCharge(string outputfiledir, string filenamebase, string name)
-{
-  // This writes the CollectedCharge file
-  int m, q, PixX, PixY;
-  string underscore = "_", slash = "/", filename;
-  filename = outputfiledir+slash+filenamebase+underscore+name+".dat";
-  ofstream cc_out(filename.c_str());
-  cc_out << setw(8) << "PixX" << setw(16) << "PixY" << setw(16) << "electrons" << endl;
-  for (m=0; m<NumberofPixelRegions; m++)
-    {
-      for (q=0; q<NumberofFilledWells[m]; q++)
-	{
-	  // First figure out the pixel coordinates
-	  PixX = (int)floor((FilledPixelCoords[m][q][0] - PixelRegionLowerLeft[m][0]) / PixelSizeX);
-	  PixY = (int)floor((FilledPixelCoords[m][q][1] - PixelRegionLowerLeft[m][1]) / PixelSizeY);
-	  cc_out << setw(8) << PixX << setw(16) << PixY << setw(16) << CollectedCharge[m][q] << endl;
-	}
-    }
-  cc_out.close();
-  printf("File %s successfully written\n", filename.c_str());
-}
-
-
 void MultiGrid::ReadConfigurationFile(string inname)
 {
+  int i, j, k;
   VerboseLevel = GetIntParam(inname, "VerboseLevel", 1, 2); // 0 - minimal output, 1 - normal, 2 - more verbose.
   outputfilebase  = GetStringParam(inname,"outputfilebase", "Test", VerboseLevel); //Output filename base
   outputfiledir  = GetStringParam(inname,"outputfiledir", "data", VerboseLevel); //Output filename directory
-  int i, j, k, n, jj;
   ScaleFactor =  GetIntParam(inname, "ScaleFactor", 1, VerboseLevel);     // Power of 2 that sets the grid size
   // ScaleFactor = 1 means grid size is 5/6 micron, 128 grids in the z-direction
   nsteps = 2 + (int)(log2(ScaleFactor));  
   printf("There will be %d total multi-grids\n",(nsteps+1));  
   // nsteps is the number of reduction steps in the Vcycle_Inner Cycle.
   qfh = GetDoubleParam(inname, "qfh", -100.0, VerboseLevel);
+  qfe = GetDoubleParam(inname, "qfe", -100.0, VerboseLevel);  
   // Poisson solver constants
   w = GetDoubleParam(inname, "w", 1.9, VerboseLevel);			// Successive Over-Relaxation factor
   ncycle = GetIntParam(inname, "ncycle", 100, VerboseLevel);		// Number of SOR cycles at each resolution
   iterations =  GetIntParam(inname, "iterations", 1, VerboseLevel);	// Number of VCycles
   Seed =  GetIntParam(inname, "Seed", 77, VerboseLevel);	// Seed
   NZExp = GetDoubleParam(inname, "NZExp", 10.0, VerboseLevel);        // Non-linear z axis exponent
-  
+  ElectronMethod = 2;
   // Overall setup
   NumSteps = GetIntParam(inname, "NumSteps", 100, VerboseLevel);
   SaveData =  GetIntParam(inname, "SaveData", 1, VerboseLevel);     // 0 - Save only Pts, N save phi,rho,E every Nth step
@@ -560,19 +408,6 @@ void MultiGrid::ReadConfigurationFile(string inname)
   GridsPerPixelY = GridsPerPixelY * ScaleFactor;
   GridSpacingY = PixelSizeY / (double)GridsPerPixelY;
 
-  if (PixelSizeX < 0.0)
-    {
-      // This is for backward compatibility with square only pixels
-      PixelSizeX = GetDoubleParam(inname, "PixelSize", 10.0, VerboseLevel);    // Pixel size in microns
-      PixelSizeY = GetDoubleParam(inname, "PixelSize", 10.0, VerboseLevel);    // Pixel size in microns      
-      GridsPerPixelX = GetIntParam(inname, "GridsPerPixel", 12, VerboseLevel); // Grids per pixel at ScaleFactor = 1
-      GridsPerPixelX = GridsPerPixelX * ScaleFactor;
-      GridSpacingX = PixelSizeX / (double)GridsPerPixelX;
-      GridsPerPixelY = GetIntParam(inname, "GridsPerPixel", 12, VerboseLevel); // Grids per pixel at ScaleFactor = 1
-      GridsPerPixelY = GridsPerPixelY * ScaleFactor;
-      GridSpacingY = PixelSizeY / (double)GridsPerPixelY;
-
-    }
   SensorThickness = GetDoubleParam(inname, "SensorThickness", 100.0, VerboseLevel);    // Sensor Thickness in microns  
 
   Nx = GetIntParam(inname, "Nx", 160, VerboseLevel);                // Number of grids in x at ScaleFactor = 1
@@ -589,102 +424,32 @@ void MultiGrid::ReadConfigurationFile(string inname)
   SimulationRegionLowerLeft[0] = 0.0;  SimulationRegionLowerLeft[1] = 0.0;
   SimulationRegionLowerLeft = GetDoubleList(inname, "SimulationRegionLowerLeft", 2, SimulationRegionLowerLeft, VerboseLevel);
   // Voltages and Charges
-  Vbb = GetDoubleParam(inname, "Vbb", -50.0, VerboseLevel);		        // Back bias
-  Vparallel_lo = GetDoubleParam(inname, "Vparallel_lo", -8.0, VerboseLevel);	// Parallel Low Voltage
-  Vparallel_hi = GetDoubleParam(inname, "Vparallel_hi", 4.0, VerboseLevel);	// Parallel High Voltage
-  GateOxide = GetDoubleParam(inname, "GateOxide", 0.15, VerboseLevel);
-  FieldOxide = GetDoubleParam(inname, "FieldOxide", 0.40, VerboseLevel);
-  FieldOxideTaper = GetDoubleParam(inname, "FieldOxideTaper", 0.50, VerboseLevel);  
-  ChannelStopWidth = GetDoubleParam(inname, "ChannelStopWidth", 1.0, VerboseLevel);
+  Vbb = GetDoubleParam(inname, "Vbb", -4.0, VerboseLevel);		        // Back bias
+  Vcontact = GetDoubleParam(inname, "Vcontact", -2.0, VerboseLevel);	// Contact voltage
+  BottomOxide = GetDoubleParam(inname, "BottomOxide", 0.15, VerboseLevel);
   BackgroundDoping = GetDoubleParam(inname, "BackgroundDoping", -1.0E12, VerboseLevel);
-  ChannelSurfaceCharge = GetDoubleParam(inname, "ChannelSurfaceCharge", 0.0, VerboseLevel);
-  ChannelStopSurfaceCharge = GetDoubleParam(inname, "ChannelStopSurfaceCharge", 0.0, VerboseLevel);
-  ChannelStopSideDiff = GetDoubleParam(inname, "ChannelStopSideDiff", FieldOxideTaper, VerboseLevel);  
-  NumPhases = GetIntParam(inname, "NumPhases", 3, VerboseLevel);
-  CollectingPhases = GetIntParam(inname, "CollectingPhases", 1, VerboseLevel);
-  GateGap = GetDoubleParam(inname, "GateGap", 0.0, VerboseLevel);    
-  if(CollectingPhases > NumPhases)
-    {
-      printf("Cannot have more collecting phases than phases!  Quitting\n");
-      exit(0);
-    }
+  TopSurfaceDoping = GetDoubleParam(inname, "TopSurfaceDoping", -1.0E12, VerboseLevel);
+  TopDopingThickness = GetDoubleParam(inname, "TopDopingThickness", 0.0, VerboseLevel);
+
   string profilenum, regionnum;
-  ChannelProfile = GetIntParam(inname, "ChannelProfile", 0, VerboseLevel);
-  if (ChannelProfile == 0)
+  ContactProfile = GetIntParam(inname, "ContactProfile", 0, VerboseLevel);
+  if (ContactProfile == 0)
     {
-      ChannelDoping = GetDoubleParam(inname, "ChannelDoping", 5.0E11, VerboseLevel);
-      ChannelDepth = GetDoubleParam(inname, "ChannelDepth", 1.0, VerboseLevel);
+      ContactDoping = GetDoubleParam(inname, "ContactDoping", 5.0E11, VerboseLevel);
+      ContactDepth = GetDoubleParam(inname, "ContactDepth", 1.0, VerboseLevel);
     }
   else
     {
-      ChannelDose = new double[ChannelProfile];
-      ChannelSigma = new double[ChannelProfile];
-      ChannelPeak = new double[ChannelProfile];            
-      for (i=0; i<ChannelProfile; i++)
+      ContactDose = new double[ContactProfile];
+      ContactSigma = new double[ContactProfile];
+      ContactPeak = new double[ContactProfile];            
+      for (i=0; i<ContactProfile; i++)
 	{
 	  profilenum = std::to_string(i);
-	  ChannelDose[i] = GetDoubleParam(inname, "ChannelDose_"+profilenum, 5.0E11, VerboseLevel);
-	  ChannelSigma[i] = GetDoubleParam(inname, "ChannelSigma_"+profilenum, 0.5, VerboseLevel);
-	  ChannelPeak[i] = GetDoubleParam(inname, "ChannelPeak_"+profilenum, 0.0, VerboseLevel);	  
+	  ContactDose[i] = GetDoubleParam(inname, "ContactDose_"+profilenum, 5.0E11, VerboseLevel);
+	  ContactSigma[i] = GetDoubleParam(inname, "ContactSigma_"+profilenum, 0.5, VerboseLevel);
+	  ContactPeak[i] = GetDoubleParam(inname, "ContactPeak_"+profilenum, 0.0, VerboseLevel);	  
 	}
-    }
-  ChannelStopProfile = GetIntParam(inname, "ChannelStopProfile", 0, VerboseLevel);
-  if (ChannelStopProfile == 0)
-    {
-      ChannelStopDoping = GetDoubleParam(inname, "ChannelStopDoping", 5.0E11, VerboseLevel);
-      ChannelStopDepth = GetDoubleParam(inname, "ChannelStopDepth", 1.0, VerboseLevel);
-    }
-  else
-    {
-      ChannelStopDose = new double[ChannelStopProfile];
-      ChannelStopSigma = new double[ChannelStopProfile];
-      ChannelStopPeak = new double[ChannelStopProfile];            
-      for (i=0; i<ChannelStopProfile; i++)
-	{
-	  profilenum = std::to_string(i);
-	  ChannelStopDose[i] = GetDoubleParam(inname, "ChannelStopDose_"+profilenum, 5.0E11, VerboseLevel);
-	  ChannelStopSigma[i] = GetDoubleParam(inname, "ChannelStopSigma_"+profilenum, 0.5, VerboseLevel);
-	  ChannelStopPeak[i] = GetDoubleParam(inname, "ChannelStopPeak_"+profilenum, 0.0, VerboseLevel);	  
-	}
-    }
-  // Channel Stop "Dots", if used
-  ChannelStopDotHeight = GetDoubleParam(inname, "ChannelStopDotHeight", 0.0, VerboseLevel);    
-  if (ChannelStopDotHeight > 0.001)
-    {
-      ChannelStopDotCenter = GetDoubleParam(inname, "ChannelStopDotCenter", 5.0, VerboseLevel);  
-      ChannelStopDotSurfaceCharge = GetDoubleParam(inname, "ChannelStopDotSurfaceCharge", 0.0, VerboseLevel);
-      ChannelStopDotProfile = GetIntParam(inname, "ChannelStopDotProfile", 0, VerboseLevel);
-      if (ChannelStopDotProfile == 0)
-	{
-	  ChannelStopDotDoping = GetDoubleParam(inname, "ChannelStopDotDoping", 5.0E11, VerboseLevel);
-	  ChannelStopDotDepth = GetDoubleParam(inname, "ChannelStopDotDepth", 1.0, VerboseLevel);
-	}
-      else
-	{
-	  ChannelStopDotDose = new double[ChannelStopDotProfile];
-	  ChannelStopDotSigma = new double[ChannelStopDotProfile];
-	  ChannelStopDotPeak = new double[ChannelStopDotProfile];            
-	  for (i=0; i<ChannelStopDotProfile; i++)
-	    {
-	      profilenum = std::to_string(i);
-	      ChannelStopDotDose[i] = GetDoubleParam(inname, "ChannelStopDotDose_"+profilenum, 5.0E11, VerboseLevel);
-	      ChannelStopDotSigma[i] = GetDoubleParam(inname, "ChannelStopDotSigma_"+profilenum, 0.5, VerboseLevel);
-	      ChannelStopDotPeak[i] = GetDoubleParam(inname, "ChannelStopDotPeak_"+profilenum, 0.0, VerboseLevel);	  
-	    }
-	}
-    }
-  AddTreeRings = GetIntParam(inname, "AddTreeRings", 0, VerboseLevel);
-  if (AddTreeRings == 1)
-    {
-      TreeRingAngle = GetDoubleParam(inname, "TreeRingAngle", 0.0, VerboseLevel);	  
-      TreeRingAmplitude = GetDoubleParam(inname, "TreeRingAmplitude", 0.0, VerboseLevel);	  
-      TreeRingPeriod = GetDoubleParam(inname, "TreeRingPeriod", 0.0, VerboseLevel);	  
-    }
-  else
-    {
-      TreeRingAngle = 0.0;
-      TreeRingAmplitude = 0.0;
-      TreeRingPeriod = 100.0;
     }
   
   // Continuations
@@ -704,7 +469,6 @@ void MultiGrid::ReadConfigurationFile(string inname)
   BottomSteps = GetIntParam(inname, "BottomSteps", 1000, VerboseLevel);
   NumVertices = GetIntParam(inname,"NumVertices",2, VerboseLevel);
   CalculateZ0 = GetIntParam(inname,"CalculateZ0",0, VerboseLevel);
-  ElectronMethod = GetIntParam(inname,"ElectronMethod",0, VerboseLevel);    
   ElectronZ0Fill = GetDoubleParam(inname,"ElectronZ0Fill",100.0, VerboseLevel);
   ElectronZ0Area = GetDoubleParam(inname,"ElectronZ0Area",100.0, VerboseLevel);
   LogEField = GetIntParam(inname, "LogEField", 0, VerboseLevel);
@@ -716,23 +480,12 @@ void MultiGrid::ReadConfigurationFile(string inname)
   NumberofPixelRegions = GetIntParam(inname, "NumberofPixelRegions", 0, VerboseLevel);
   if (NumberofPixelRegions > 0)
     {
-      bool PixelBoundaryInsideAnyPixelRegion = false, PixelBoundaryInsideThisPixelRegion;
       string fillednum;
       PixelRegionLowerLeft = new double*[NumberofPixelRegions];
       PixelRegionUpperRight = new double*[NumberofPixelRegions];
-      NumberofFilledWells = new int[NumberofPixelRegions];
-      FilledPixelCoords = new double**[NumberofPixelRegions];
-      CollectedCharge = new int*[NumberofPixelRegions];
-      ElectronCount = new double*[NumberofPixelRegions];
-      if (ElectronMethod == 1)
-	{
-	  BuildQFeLookup = GetIntParam(inname, "BuildQFeLookup", 0, VerboseLevel);
-	  NQFe = GetIntParam(inname, "NQFe", 81, VerboseLevel);
-	  QFemin = GetDoubleParam(inname, "QFemin", 5.0, VerboseLevel);
-	  QFemax = GetDoubleParam(inname, "QFemax", 10.0, VerboseLevel);
-	  QFeLookup = new double[NQFe * (nsteps + 1)];
-	  PixelQFe = new double*[NumberofPixelRegions];
-	}
+      NumberofContactDeltaVs = new int[NumberofPixelRegions];
+      DeltaV = new double*[NumberofPixelRegions];      
+      DeltaVPixelCoords = new double**[NumberofPixelRegions];
       for (i=0; i<NumberofPixelRegions; i++)
 	{
 	  PixelRegionLowerLeft[i] = new double[2];
@@ -743,7 +496,6 @@ void MultiGrid::ReadConfigurationFile(string inname)
 	      PixelRegionUpperRight[i][j] = 100.0;
 	    }
 	}
-      
       // Pixel Boundary Tests
       PixelBoundaryTestType = GetIntParam(inname, "PixelBoundaryTestType", 0, VerboseLevel);
       PixelBoundaryLowerLeft = new double(2);
@@ -780,14 +532,6 @@ void MultiGrid::ReadConfigurationFile(string inname)
 	{
 	  NumElec = GetIntParam(inname, "NumElec", 1000, VerboseLevel);
 	}
-      if (PixelBoundaryTestType == 3)
-	{
-	  NumElec = GetIntParam(inname, "NumElec", 1000, VerboseLevel);	  
-	  FringeAngle = GetDoubleParam(inname, "FringeAngle", 0.0, VerboseLevel);	  
-	  FringePeriod = GetDoubleParam(inname, "FringePeriod", 0.0, VerboseLevel);	  
-	  Xoffset = GetDoubleParam(inname, "Xoffset", 0.0, VerboseLevel);
-	  Yoffset = GetDoubleParam(inname, "Yoffset", 0.0, VerboseLevel);
-	}
       if (PixelBoundaryTestType == 6)
 	{
 	  NumElec = GetIntParam(inname, "NumElec", 1620, VerboseLevel);
@@ -795,94 +539,23 @@ void MultiGrid::ReadConfigurationFile(string inname)
 	  Fe55ElectronMult = GetDoubleParam(inname, "Fe55ElectronMult", 1.0, VerboseLevel);
 	  Fe55HoleMult = GetDoubleParam(inname, "Fe55HoleMult", 1.0, VerboseLevel);	  	  
 	}
-      
       for (i=0; i<NumberofPixelRegions; i++)
 	{
-	  int NewNumberofFilledWells;
-	  PixelBoundaryInsideThisPixelRegion = false;
 	  regionnum = std::to_string(i);
-	  PixelRegionLowerLeft[i] = GetDoubleList(inname, "PixelRegionLowerLeft_"+regionnum, 2, PixelRegionLowerLeft[i], VerboseLevel);
-	  PixelRegionUpperRight[i] = GetDoubleList(inname, "PixelRegionUpperRight_"+regionnum, 2, PixelRegionUpperRight[i], VerboseLevel);
-	  NumberofFilledWells[i] = GetIntParam(inname, "NumberofFilledWells_"+regionnum, 0, VerboseLevel);
-	  NewNumberofFilledWells = NumberofFilledWells[i];
-	  // Will reduce number of filled wells if some are inside PixelBoundary
-	  if ((PixelBoundaryLowerLeft[0] >= PixelRegionLowerLeft[i][0]) && (PixelBoundaryLowerLeft[1] >= PixelRegionLowerLeft[i][1]) && (PixelBoundaryUpperRight[0] <= PixelRegionUpperRight[i][0]) && (PixelBoundaryUpperRight[1] <= PixelRegionUpperRight[i][1]))
+	  NumberofContactDeltaVs[i] = GetIntParam(inname, "NumberofContactDeltaVs_"+regionnum, 0, VerboseLevel);
+	  DeltaVPixelCoords[i] = new double*[NumberofContactDeltaVs[i]];
+	  DeltaV[i] = new double[NumberofContactDeltaVs[i]];
+	  for (j=0; j<NumberofContactDeltaVs[i]; j++)
 	    {
-	      PixelBoundaryInsideAnyPixelRegion = true;
-	      PixelBoundaryInsideThisPixelRegion = true;
-	      NumberofFilledWells[i] += PixelBoundaryNx * PixelBoundaryNy;
-	      // PixelBoundary added to number of wells filled in .cfg file.
-	      // Use first PixelBoundaryNx * PixelBoundaryNy locations for PixelBoundary tests,
-	      // then any cells filled in .cfg file which are outside pixel boundary
-	      NewNumberofFilledWells = NumberofFilledWells[i];
-	      // Will reduce number of filled wells if some are inside PixelBoundary
-	      if (VerboseLevel >2) printf("In ReadConfig. NewNumberofFilledWells = %d\n",NewNumberofFilledWells);
-	    }
-	  CollectedCharge[i] = new int[NumberofFilledWells[i]];
-	  FilledPixelCoords[i] = new double*[NumberofFilledWells[i]];
-	  ElectronCount[i] = new double[NumberofFilledWells[i] * (nsteps + 1)];
-	  if (ElectronMethod == 1)
-	    {
-	      PixelQFe[i] = new double[NumberofFilledWells[i] * (nsteps + 1)];
-	    }
-	  for (j=0; j<NumberofFilledWells[i]; j++)
-	    {
-	      int PixX, PixY;
-	      PixX = j % PixelBoundaryNx;
-	      PixY = (j - PixX) / PixelBoundaryNx;
-	      for (n=0; n<nsteps+1; n++)
-		{
-		  ElectronCount[i][n*NumberofFilledWells[i]+j] = 0.0;
-		  if (ElectronMethod == 1)
-		    {
-		      PixelQFe[i][n*NumberofFilledWells[i]+j] = 100.0;
-		    }
-		}
-	      FilledPixelCoords[i][j] = new double[2];
+	      fillednum = std::to_string(j);
+	      DeltaV[i][j] = GetDoubleParam(inname,"DeltaV_"+regionnum+"_"+fillednum,0, VerboseLevel);
+	      DeltaVPixelCoords[i][j] = new double[2];
 	      for (k=0; k<2; k++)
 		{
-		  FilledPixelCoords[i][j][k] = 0.0;
+		  DeltaVPixelCoords[i][j][k] = 0.0;
 		}
-	      if (!PixelBoundaryInsideThisPixelRegion)
-		{
-		  fillednum = std::to_string(j);
-		  CollectedCharge[i][j] = GetIntParam(inname,"CollectedCharge_"+regionnum+"_"+fillednum,0, VerboseLevel);
-		  FilledPixelCoords[i][j] = GetDoubleList(inname, "FilledPixelCoords_"+regionnum+"_"+fillednum, 2, FilledPixelCoords[i][j], VerboseLevel);
-		}
-	      else
-		{
-		  if (j < PixelBoundaryNx * PixelBoundaryNy)
-		    {
-		      CollectedCharge[i][j] = 0.0;
-		      FilledPixelCoords[i][j][0] = PixelBoundaryLowerLeft[0] + ((double)PixX + 0.5) * PixelSizeX;  
-		      FilledPixelCoords[i][j][1] = PixelBoundaryLowerLeft[1] + ((double)PixY + 0.5) * PixelSizeY;   		    
-		    }
-		  else
-		    {
-		      fillednum = std::to_string(j -  PixelBoundaryNx * PixelBoundaryNy);
-		      CollectedCharge[i][j] = GetIntParam(inname,"CollectedCharge_"+regionnum+"_"+fillednum,0, VerboseLevel);
-		      FilledPixelCoords[i][j] = GetDoubleList(inname, "FilledPixelCoords_"+regionnum+"_"+fillednum, 2, FilledPixelCoords[i][j], VerboseLevel);
-		      // Check if this is inside the PixelRegion
-		      if ((FilledPixelCoords[i][j][0] >= PixelBoundaryLowerLeft[0]) && (FilledPixelCoords[i][j][1] >= PixelBoundaryLowerLeft[1]) && (FilledPixelCoords[i][j][0] <= PixelBoundaryUpperRight[0]) && (FilledPixelCoords[i][j][1] <= PixelBoundaryUpperRight[1]))
-			{
-			  // This pixel is inside the pixel boundary.  Delete it from the list and move the charge to the appropriate pixel
-			  NewNumberofFilledWells -= 1;
-			  PixX = (int)floor((FilledPixelCoords[i][j][0] - PixelBoundaryLowerLeft[0]) / PixelSizeX);
-			  PixY = (int)floor((FilledPixelCoords[i][j][1] - PixelBoundaryLowerLeft[1]) / PixelSizeY);
-			  jj = PixX + PixelBoundaryNx * PixY;
-			  CollectedCharge[i][jj] = CollectedCharge[i][j];
-			  CollectedCharge[i][j] = 0.0;
-			  if (VerboseLevel >2) printf("In ReadConfig. PixX = %d, PixY = %d, jj = %d, NewNumberofFilledWells = %d\n",PixX, PixY, jj, NewNumberofFilledWells);
-			}
-		    }
-		}
+	      DeltaVPixelCoords[i][j] = GetDoubleList(inname, "DeltaVPixelCoords_"+regionnum+"_"+fillednum, 2, DeltaVPixelCoords[i][j], VerboseLevel);
 	    }
-	  NumberofFilledWells[i] = NewNumberofFilledWells;
-	}
-      if(!PixelBoundaryInsideAnyPixelRegion)
-	{
-	  printf("Pixel Boundary not Inside any Pixel Region!!!  This may cause errors!!!\n");
-	  //exit(0);
 	}
     }
   if (PixelBoundaryTestType == 5)
@@ -899,8 +572,10 @@ void MultiGrid::ReadConfigurationFile(string inname)
 	  ReadPhotonList(outputfiledir, PhotonList);
 	}
     }
-
+  //}//?? Not sure this is in the right place!!!
   // Fixed Voltage Regions
+  // Commenting out
+  /*
   NumberofFixedRegions = GetIntParam(inname, "NumberofFixedRegions", 0, VerboseLevel);
   FixedRegionLowerLeft = new double*[NumberofFixedRegions];
   FixedRegionUpperRight = new double*[NumberofFixedRegions];
@@ -973,11 +648,11 @@ void MultiGrid::ReadConfigurationFile(string inname)
         filter_input.close();
       }
     }
-
+  */
   return;
 }
 
-void MultiGrid::BuildArrays(Array3D** phi, Array3D** rho, Array3D** elec, Array3D** hole, Array3D** eps, Array3D** E, Array2DInt** BCType, Array2D** QFe, Array2D** QFh, Array2DInt** Ckmin, Array2DInt** Vkmin)
+void MultiGrid::BuildArrays(Array3D** phi, Array3D** rho, Array3D** elec, Array3D** hole, Array3D** E, Array2DInt** BCType, Array2D** QFe, Array2D** QFh, Array2DInt** Ckmin, Array2DInt** Vkmin)
 {
   // Builds the multigrid arrays
   int nx, ny, nz, nzelec, nze, nxx, nyy, nzz, n;
@@ -1007,7 +682,6 @@ void MultiGrid::BuildArrays(Array3D** phi, Array3D** rho, Array3D** elec, Array3
   zmaxelec = rho[0]->Z(rho[0]->zp[nzelec] + rho[0]->dzp / 2.0);
   elec[0] = new Array3D(Xmin,Xmax,nxx,Ymin,Ymax,nyy,Zmin,zmaxelec,nzelec,NZExp,SensorThickness);
   hole[0] = new Array3D(Xmin,Xmax,nxx,Ymin,Ymax,nyy,Zmin,zmaxelec,nzelec,NZExp,SensorThickness);
-  eps[0] = new Array3D(Xmin,Xmax,nxx,Ymin,Ymax,nyy,Zmin,zmaxelec,nzelec,NZExp,SensorThickness);
   BCType[0] = new Array2DInt(Xmin,Xmax,nxx,Ymin,Ymax,nyy);
   QFe[0] = new Array2D(Xmin,Xmax,nxx,Ymin,Ymax,nyy);
   QFh[0] = new Array2D(Xmin,Xmax,nxx,Ymin,Ymax,nyy);
@@ -1040,7 +714,6 @@ void MultiGrid::BuildArrays(Array3D** phi, Array3D** rho, Array3D** elec, Array3
       rho[n] = new Array3D(xmin,xmax,nx,ymin,ymax,ny,zmin,zmax,nz,NZExp,SensorThickness);
       elec[n] = new Array3D(xmin,xmax,nx,ymin,ymax,ny,zmin,zmax,nze,NZExp,SensorThickness);
       hole[n] = new Array3D(xmin,xmax,nx,ymin,ymax,ny,zmin,zmax,nze,NZExp,SensorThickness);
-      eps[n] = new Array3D(xmin,xmax,nx,ymin,ymax,ny,zmin,zmax,nze,NZExp,SensorThickness);      
       BCType[n] = new Array2DInt(xmin,xmax,nx,ymin,ymax,ny);
       QFe[n] = new Array2D(xmin,xmax,nx,ymin,ymax,ny);
       QFh[n] = new Array2D(xmin,xmax,nx,ymin,ymax,ny);            
@@ -1055,22 +728,12 @@ void MultiGrid::BuildArrays(Array3D** phi, Array3D** rho, Array3D** elec, Array3
   return;
 }
 
-void MultiGrid::SetInitialVoltages(Array3D* phi, Array3D* eps, Array2DInt* BCType, Array2DInt* Vkmin, Array2DInt* Ckmin)
+void MultiGrid::SetInitialVoltages(Array3D* phi, Array2DInt* BCType, Array2DInt* Vkmin)
 {
   // This sets up the initial voltages on the boundaries
-  int i, j, k, n, m, p, index, index2;
-  int PixY;
-  double PixYmin, GateWidth, eps_factor_gap;
-  double Ylower[NumPhases], Yupper[NumPhases];
-  double GateVoltage[NumPhases], GapVoltage[NumPhases];
-  // Potential on top
-
-  // These "fudge factors" for epsilon in the gate gap are still experimental
-  if (phi->dx > 1.20) eps_factor_gap = 10.0;
-  else if (phi->dx > 0.60)  eps_factor_gap = 5.5;
-  else if (phi->dx > 0.30)  eps_factor_gap = 2.0;
-  else eps_factor_gap = 1.3;  
-    
+  int i, j, m, index, index2;
+  int PixX, PixY;
+  double PixXmin, PixYmin, ContactXmin, ContactXmax, ContactYmin, ContactYmax;
   
   for (i=0; i<phi->nx; i++)
     {
@@ -1081,105 +744,48 @@ void MultiGrid::SetInitialVoltages(Array3D* phi, Array3D* eps, Array2DInt* BCTyp
 	}
     }
   // Potentials in Pixel Region
-  GateWidth = PixelSizeY / (double)NumPhases;
-  for (m=0; m<NumPhases; m++)
-    {
-      GateVoltage[m] = Vparallel_hi;
-      GapVoltage[m] = Vparallel_lo;
-      if ((NumPhases + CollectingPhases) % 2 == 0)
-	{
-	  // Even case - gate boundary coincident with pixel edge
-	  Ylower[m] = (double)m * GateWidth - phi->dy / 2.0;	
-	  Yupper[m] = Ylower[m] + GateWidth;
-	  // Need to shift last gate by 1 grid to keep things centered.
-	  if (m == NumPhases - 2)
-	    {
-	      Yupper[m] += phi->dy;
-	    }
-	  if (m == NumPhases - 1)
-	    {
-	      Ylower[m] += phi->dy;
-	    }
-	}
-      else
-	{
-	  // Odd case - gate boundary straddles pixel edge
-	  Ylower[m] = ((double)m - 0.5) * GateWidth;
-	  Yupper[m] = Ylower[m] + GateWidth;
-	}
-      //printf("m = %d, Ylower = %f, Yupper = %f\n", m, Ylower[m], Yupper[m]);
-    }
-  for (p=0; p<(CollectingPhases-1); p++)
-    {
-      // Gap voltage is only high if both sides are high.
-      GapVoltage[p+2] = Vparallel_hi;
-    }
-  for (p=0; p<(NumPhases-CollectingPhases); p++)
-    {
-      // Set the outer phases low, bottom, then top, then bottom, then top, ...
-      if (p % 2 == 0)
-	{
-	  GateVoltage[p/2] = Vparallel_lo;
-	}
-      else
-	{
-	  GateVoltage[NumPhases - 1 - (p - 1)/2] = Vparallel_lo;
-	}
-    }
-  
-  if (VerboseLevel > 2)
-    {
-      for (m=0; m<NumPhases; m++)
-	{
-	  printf("In SetInitialVoltages. m = %d, Ylower = %f, Yupper = %f, GateVoltage = %f, GapVoltage = %f\n",m, Ylower[m],Yupper[m],GateVoltage[m], GapVoltage[m]);
-	}
-    }
-  for (n=0; n<NumberofPixelRegions; n++)
+  for (m=0; m<NumberofPixelRegions; m++)
     {
       for (i=0; i<phi->nx; i++)
 	{
-	  if (phi->x[i] < PixelRegionLowerLeft[n][0] || phi->x[i] > PixelRegionUpperRight[n][0])
+	  if (phi->x[i] < PixelRegionLowerLeft[m][0] || phi->x[i] > PixelRegionUpperRight[m][0])
 	    {
 	      continue; // If not in PixelRegion, continue
 	    }
+	  PixX = (int)floor((phi->x[i] - PixelRegionLowerLeft[m][0]) / PixelSizeX);
+	  PixXmin = PixelRegionLowerLeft[m][0] + (double)PixX * PixelSizeX;
+	  ContactXmin = PixXmin + (PixelSizeX - ContactWidth) / 2.0;
+	  ContactXmax = ContactXmin + ContactWidth;
 	  for (j=0; j<phi->ny; j++)
 	    {
-	      if (phi->y[j] < PixelRegionLowerLeft[n][1] || phi->y[j] > PixelRegionUpperRight[n][1])
+	      if (phi->y[j] < PixelRegionLowerLeft[m][1] || phi->y[j] > PixelRegionUpperRight[m][1])
 		{
 		  continue; // If not in PixelRegion, continue
 		}
 	      index = i + j * phi->nx;
-	      BCType->data[index] = -1; // Used to identify the pixel regions	      
-	      PixY = (int)floor((phi->y[j] - PixelRegionLowerLeft[n][1]) / PixelSizeY);
-	      PixYmin = PixelRegionLowerLeft[n][1] + (double)PixY * PixelSizeY;
-	      for (m=0; m<NumPhases; m++)
+	      PixY = (int)floor((phi->y[j] - PixelRegionLowerLeft[m][1]) / PixelSizeY);
+	      PixYmin = PixelRegionLowerLeft[m][1] + (double)PixY * PixelSizeY;
+	      ContactYmin = PixYmin + (PixelSizeY - ContactHeight) / 2.0;
+	      ContactYmax = ContactYmin + ContactHeight;
+	      if (phi->x[i] >= ContactXmin && phi->x[i] <= ContactXmax && phi->y[j] >= ContactYmin && phi->y[j] <= ContactYmax)
 		{
- 		  if (((phi->y[j] >= PixYmin + Ylower[m] - GateGap / 2.0 && phi->y[j] <= PixYmin + Ylower[m] + GateGap / 2.0) || (Ylower[m] < 0.0 && (phi->y[j] >= PixYmin + Ylower[m] + PixelSizeY - GateGap / 2.0 && phi->y[j] <= PixYmin + Ylower[m] + PixelSizeY + GateGap / 2.0))) && GateGap > 0.001) 
- 		    {
-		      // In the gate gap
-		      Vkmin->data[index] = 1;
-		      //BCType->data[index] = 1;  // Free BC here
-		      phi->data[index] = GapVoltage[m];
-		      for (k=Vkmin->data[index]; k<Ckmin->data[index]; k++)		      
-			{
-			  index2 = index + k * phi->nx * phi->ny;
-			  eps->data[index2] = EPSILON_OX / EPSILON_SI * eps_factor_gap;
-			}
- 		    }
- 		  else if ((phi->y[j] >= PixYmin + Ylower[m] && phi->y[j] <= PixYmin + Yupper[m]) || (Ylower[m] < 0.0 && (phi->y[j] >= PixYmin + Ylower[m] + PixelSizeY && phi->y[j] <= PixYmin + Yupper[m] + PixelSizeY)))
- 		    {
-		      for (k=0; k<Vkmin->data[index]; k++)
-			{
-			  index2 = index + k * phi->nx * phi->ny;
-			  phi->data[index2] = GateVoltage[m];
-			}
- 		    }
+		  // In contact region
+		  index2 = index + Vkmin->data[index] * phi->nx * phi->ny;
+		  phi->data[index2] = Vcontact;
+		  BCType->data[index] = 0;
 		}
-	      if (VerboseLevel >2 && i == (phi->nx-1)/2) printf("In SetInitialVoltages. j = %d, Vkmin = %d, phi[0] = %f\n",j,Vkmin->data[index],phi->data[index]);		      
- 	    }
- 	}
+	      else
+		{
+		  // Between contacts
+		  BCType->data[index] = 1;		  
+		}
+	    }
+	}
     }
+  
   // This sets the potentials and the boundary conditions in the Fixed Voltage regions.
+  // Comment this out for now
+  /*
   for (n=0; n<NumberofFixedRegions; n++)
     {
       for (i=0; i<phi->nx; i++)
@@ -1205,6 +811,7 @@ void MultiGrid::SetInitialVoltages(Array3D* phi, Array3D* eps, Array2DInt* BCTyp
 	    }
 	}
     }
+  */
   if(VerboseLevel > 2)
     {
       printf("Finished setting Boundary Potentials, \n");
@@ -1217,149 +824,67 @@ void MultiGrid::SetInitialVoltages(Array3D* phi, Array3D* eps, Array2DInt* BCTyp
 void MultiGrid::SetFixedCharges(Array3D* rho, Array2DInt* Ckmin)
 {
   // This sets the fixed lattice charges
-  int i, j, k, n, index, index2, PixX, PixY;
-  double PixXmin, PixYmin, DotYmin, DotYmax, ChargeFactor = (QE*MICRON_PER_M/(EPSILON_0*EPSILON_SI)) / pow(MICRON_PER_CM, 3);
-  bool AlreadyDoped = false;  
-  double TaperRatio;
-  int NLeft, NRight, NTaper, LastCS, LastC;
-  // ChargeFactor converts doping in cm^-3 into the code units
+  int i, j, k, m, index, index2, PixX, PixY;
+  double PixXmin, PixYmin, ChargeFactor = (QE*MICRON_PER_M/(EPSILON_0*EPSILON_SI)) / pow(MICRON_PER_CM, 3);
+  double ContactXmin, ContactXmax, ContactYmin, ContactYmax;
+// ChargeFactor converts doping in cm^-3 into the code units
   // Set the background charge:
-  double tr_xprime, tr_background;
   for (i=0; i<rho->nx; i++)
     {
       for (j=0; j<rho->ny; j++)
 	{
 	  index = i + j * rho->nx;
-	  tr_xprime = rho->x[i] * cos(TreeRingAngle * pi / 180.0) + rho->y[j] * sin(TreeRingAngle * pi / 180.0);
-	  tr_background = BackgroundDoping * ChargeFactor * (1.0 + TreeRingAmplitude * cos(tr_xprime / TreeRingPeriod));
-	  //if (rho->nz == 161 && rho->y[j] == 80) printf("i = %d, rho = %f\n",i,tr_background);
 	  for (k=Ckmin->data[index]; k<rho->nz-1; k++)
 	    {
 	      index2 = index + k * rho->nx * rho->ny;
-	      rho->data[index2] = tr_background;
+	      if (rho->z[k] > (SensorThickness - TopDopingThickness))
+		{
+		  rho->data[index2] = TopSurfaceDoping * ChargeFactor;
+		}
+	      else
+		{
+		  rho->data[index2] = BackgroundDoping * ChargeFactor;
+		}
 	    }
 	}
     }
-  // Charges in Pixel Regions// This uses the same basic logic as Setkmins to find the edges and TaperRatio,
-  // But here the taper is set by ChannelStopSideDiff instead of FieldOxideTaper.
-  for (n=0; n<NumberofPixelRegions; n++)
+  // Charges in Pixel Regions
+
+  for (m=0; m<NumberofPixelRegions; m++)
     {
-      NLeft = 0; NRight = 0;
       for (i=0; i<rho->nx; i++)
 	{
-	  if (rho->x[i] >= PixelRegionLowerLeft[n][0] && rho->x[i] <= PixelRegionUpperRight[n][0])
+	  if (rho->x[i] < PixelRegionLowerLeft[m][0] || rho->x[i] > PixelRegionUpperRight[m][0])
 	    {
-	      PixX = (int)floor((rho->x[i] - PixelRegionLowerLeft[n][0]) / PixelSizeX);
-	      PixXmin = PixelRegionLowerLeft[n][0] + (double)PixX * PixelSizeX;
-	      if (PixX !=0) continue;
-	      if (rho->x[i] <= PixXmin + ChannelStopWidth/2.0 || rho->x[i] >= PixXmin + PixelSizeX - ChannelStopWidth/2.0)
-		{
-		  // Channel Stop region
-		  continue;
-		}
-	      else if (rho->x[i] <= PixXmin + ChannelStopWidth/2.0 + ChannelStopSideDiff)
-		{
-		  // Left side taper
-		  if (VerboseLevel > 2)
-		    {
-		    printf("In SetFixedCharges. Setting Tapers. Nz = %d, i = %d, Left\n",rho->nz,i);
-		    }
-		  NLeft += 1;
-		}
-	      else if (rho->x[i] >= PixXmin + PixelSizeX - ChannelStopWidth/2.0 - ChannelStopSideDiff)
-		{
-		  // Right side taper
-		  if (VerboseLevel > 2)
-		    {
-		      printf("In SetFixedCharges. Setting Tapers. Nz = %d, i = %d, Right\n",rho->nz,i);
-		    }
-		  NRight += 1;
-		}
-	      else
-		{
-		  // Channel region
-		  continue;
-		}
+	      continue; // If not in PixelRegion, continue
 	    }
-	}
-      if (NLeft == NRight)  NTaper = NLeft;
-      else NTaper = max(NLeft, NRight);
-      LastCS = 0, LastC = i;	  
-      if (VerboseLevel > 2) printf("In SetFixedCharges. Nz = %d, NTaper = %d \n",rho->nz,NTaper);
-      for (i=0; i<rho->nx; i++)
-	{
-	  if (rho->x[i] >= PixelRegionLowerLeft[n][0] && rho->x[i] <= PixelRegionUpperRight[n][0])
+	  PixX = (int)floor((rho->x[i] - PixelRegionLowerLeft[m][0]) / PixelSizeX);
+	  PixXmin = PixelRegionLowerLeft[m][0] + (double)PixX * PixelSizeX;
+	  ContactXmin = PixXmin + (PixelSizeX - ContactWidth) / 2.0;
+	  ContactXmax = ContactXmin + ContactWidth;
+	  for (j=0; j<rho->ny; j++)
 	    {
-	      PixX = (int)floor((rho->x[i] - PixelRegionLowerLeft[n][0]) / PixelSizeX);
-	      PixXmin = PixelRegionLowerLeft[n][0] + (double)PixX * PixelSizeX;
-	      if (rho->x[i] <= PixXmin + ChannelStopWidth/2.0 || rho->x[i] >= PixXmin + PixelSizeX - ChannelStopWidth/2.0)
+	      if (rho->y[j] < PixelRegionLowerLeft[m][1] || rho->y[j] > PixelRegionUpperRight[m][1])
 		{
-		  // Channel Stop region
-		  TaperRatio = 1.0;
-		  LastCS = i;
+		  continue; // If not in PixelRegion, continue
 		}
-	      else if (rho->x[i] <= PixXmin + ChannelStopWidth/2.0 + ChannelStopSideDiff)
+	      index = i + j * rho->nx;
+	      PixY = (int)floor((rho->y[j] - PixelRegionLowerLeft[m][1]) / PixelSizeY);
+	      PixYmin = PixelRegionLowerLeft[m][1] + (double)PixY * PixelSizeY;
+	      ContactYmin = PixYmin + (PixelSizeY - ContactHeight) / 2.0;
+	      ContactYmax = ContactYmin + ContactHeight;
+	      if (rho->x[i] >= ContactXmin && rho->x[i] <= ContactXmax && rho->y[j] >= ContactYmin && rho->y[j] <= ContactYmax)
 		{
-		  // Left side taper		      
-		  TaperRatio = 1.0 - (double)(i - LastCS) / (double)(NTaper + 1);
-		}
-	      else if (rho->x[i] >= PixXmin + PixelSizeX - ChannelStopWidth/2.0 - ChannelStopSideDiff)
-		{
-		  // Right side taper		      		      
-		  TaperRatio = (double)(i - LastC) / (double)(NTaper + 1);
-		}
-	      else
-		{
-		  // Channel region
-		  TaperRatio = 0.0;
-		  LastC = i;		  
-		  for (j=0; j<rho->ny; j++)
-		    {
-		      if (rho->y[j] < PixelRegionLowerLeft[n][1] || rho->y[j] > PixelRegionUpperRight[n][1])
-			{
-			  continue; // If not in PixelRegion, continue
-			}
-		      SetCharge(rho, Ckmin, i, j, 1, 1.0);
-		      if (VerboseLevel >2 && j == (rho->ny-1)/2) printf("In SetFixedCharges. Nz = %d, i = %d, PixX = %d, Ckmin = %d, Channel\n",rho->nz,i,PixX,Ckmin->data[i+j*rho->nx]);
-		    }
-		  continue;
-		}
-	      for (j=0; j<rho->ny; j++)
-		{
-		  if (rho->y[j] < PixelRegionLowerLeft[n][1] || rho->y[j] > PixelRegionUpperRight[n][1])
-		    {
-		      continue; // If not in PixelRegion, continue
-		    }
-		  PixY = (int)floor((rho->y[j] - PixelRegionLowerLeft[n][1]) / PixelSizeY);
-		  PixYmin = PixelRegionLowerLeft[n][1] + (double)PixY * PixelSizeY;
-		  DotYmin = PixYmin + ChannelStopDotCenter - ChannelStopDotHeight / 2.0;
-		  DotYmax = PixYmin + ChannelStopDotCenter + ChannelStopDotHeight / 2.0;
-		  // Channel Stop region
-		  SetCharge(rho, Ckmin, i, j, 2, TaperRatio);		  
-		  if (VerboseLevel >2 && j == (rho->ny-1)/2) printf("in SetFixedCharges. Nz = %d, i = %d, PixX = %d, Ckmin = %d, Channel Stop\n",rho->nz,i,PixX,Ckmin->data[i+j*rho->nx]);
-		  if (DotYmin > PixYmin) // "Dot" wholly within one pixel
-		    {
-		      if  ((rho->y[j] >= DotYmin) && (rho->y[j] <= DotYmax))
-			{
-			  // Channel Stop Dot region
-			  SetCharge(rho, Ckmin, i, j, 3, TaperRatio);		  
-			  if (VerboseLevel >2) printf("in SetFixedCharges. Nz = %d, i = %d, y=%.2f, PixY = %d, Ckmin = %d, Channel Stop Dot Center\n",rho->nz,i,rho->y[j],PixY,Ckmin->data[i+j*rho->nx]);
-			}
-		    }
-		  else // "Dot" straddles pixel edge
-		    {
-		      if  ((rho->y[j] <= DotYmax) || (rho->y[j] >= PixelSizeY + DotYmin))
-			{
-			  // Channel Stop Dot region
-			  SetCharge(rho, Ckmin, i, j, 3, TaperRatio);		  
-			  if (VerboseLevel >2) printf("in SetFixedCharges. Nz = %d, i = %d, y=%.2f, PixY = %d, Ckmin = %d, Channel Stop Dot Corner\n",rho->nz,i,rho->y[j],PixY,Ckmin->data[i+j*rho->nx]);
-			}
-		    }
+		  // In contact region
+		  SetCharge(rho, Ckmin, i, j, 1);		  
 		}
 	    }
 	}
     }
+
   //Charges in Fixed regions
+  // Commented out for now
+  /*
   for (n=0; n<NumberofFixedRegions; n++)
     {
       for (i=0; i<rho->nx; i++)
@@ -1394,6 +919,7 @@ void MultiGrid::SetFixedCharges(Array3D* rho, Array2DInt* Ckmin)
 	    }
 	}
     }
+  */
   if(VerboseLevel > 2)
     {
       printf("Finished setting fixed charges\n");
@@ -1402,14 +928,13 @@ void MultiGrid::SetFixedCharges(Array3D* rho, Array2DInt* Ckmin)
 }
 
 
-double MultiGrid::SOR_Inner(Array3D* phi, Array3D* rho, Array3D* elec, Array3D* hole, Array3D* eps, Array2DInt* BCType, Array2D* QFe, Array2D* QFh, Array2DInt* Ckmin, Array2DInt* Vkmin)
+double MultiGrid::SOR_Inner(Array3D* phi, Array3D* rho, Array3D* elec, Array3D* hole, Array2DInt* BCType, Array2D* QFe, Array2D* QFh, Array2DInt* Ckmin, Array2DInt* Vkmin)
 {
   // This is the main loop that calculates the potentials in the array through Successive Over Relaxation.
   // An inner Newton's method loop is used to solve the non-linear Quasi-Fermi level equations.
   // Assumes fixed potentials on the top, mixture of fixed and free BC on bottom, free or periodic BC on the sides.
   double newphi, oldnewphi, tol, exponent = 0.0;
   double omw, w6, hsquared, zhsquaredp, zhsquaredm;
-  double apx, amx, apy, amy, apz, amz; // Dielectric constant averages
   double SORChargeFactor =  (QE*MICRON_PER_M/(EPSILON_0*EPSILON_SI));
   double MaxExponent = log(1.0E10 / (Ni * SORChargeFactor)); // This limits mobile carrier density from getting too large
   double MinElec = 1.0E-6; // electron concentrations are not adjusted below this value
@@ -1473,22 +998,10 @@ double MultiGrid::SOR_Inner(Array3D* phi, Array3D* rho, Array3D* elec, Array3D* 
 			  indmz = ind - nxy;
 			}
 		      indpz = ind + nxy;
-		      if (k < eps->nz - 1)
-			{
-			  apx = (eps->data[ind] + eps->data[indpx]) / 2.0;
-			  amx = (eps->data[ind] + eps->data[indmx]) / 2.0;	      
-			  apy = (eps->data[ind] + eps->data[indpy]) / 2.0;
-			  amy = (eps->data[ind] + eps->data[indmy]) / 2.0;	      
-			  apz = (eps->data[ind] + eps->data[indpz]) / 2.0;
-			  amz = (eps->data[ind] + eps->data[indmz]) / 2.0;	      
-			}
-		      else
-			{
-			  apx = 1.0; amx = 1.0; apy = 1.0; amy = 1.0; apz = 1.0; amz = 1.0;
-			}
-		      w6 = w / (apx + amx + apy + amy + apz * phi->zplus[k] + amz * phi->zminus[k]);
+
+		      w6 = w / (4.0 + phi->zplus[k] + phi->zminus[k]);
 		      CellVolume = rho->dx * rho->dy * rho->zw[k];
-		      Term1 = omw * phi->data[ind] + w6 * (amx * phi->data[indmx] + apx * phi->data[indpx] + amy * phi->data[indmy] + apy * phi->data[indpy] + amz * phi->zminus[k] * phi->data[indmz] + apz * phi->zplus[k] * phi->data[indpz] + hsquared * rho->data[ind]);
+		      Term1 = omw * phi->data[ind] + w6 * (phi->data[indmx] + phi->data[indpx] + phi->data[indmy] + phi->data[indpy] + phi->zminus[k] * phi->data[indmz] + phi->zplus[k] * phi->data[indpz] + hsquared * rho->data[ind]);
 		      newphi = phi->data[ind];
 		      if (k>=Ckmin->data[ind2] && QFe->data[ind2] > 1.0E5 && elec->data[ind] > MinElec)
 			{
@@ -1715,13 +1228,12 @@ double MultiGrid::SOR_Inner(Array3D* phi, Array3D* rho, Array3D* elec, Array3D* 
 }
 
 
-double MultiGrid::Error_Inner(Array3D* phi, Array3D* rho, Array3D* elec, Array3D* hole, Array3D* eps, Array2DInt* BCType, Array2DInt* Vkmin)
+double MultiGrid::Error_Inner(Array3D* phi, Array3D* rho, Array3D* elec, Array3D* hole, Array2DInt* BCType, Array2DInt* Vkmin)
 {
   // This calculates the residual error after completing an SOR cycle
   double RhoChargeFactor =  (QE*MICRON_PER_M/(EPSILON_0*EPSILON_SI)) / (rho->dx * rho->dy);
   double newphi, rhosum, error = 0.0;
   double hsquared, w6;
-  double apx, amx, apy, amy, apz, amz; // Dielectric constant averages  
   int i, j, k, nxy, ind, ind2, indmx, indpx, indmy, indpy, indmz, indpz;
   nxy = phi->nx * phi->ny;
   hsquared =  phi->dx * phi->dy;
@@ -1754,21 +1266,8 @@ double MultiGrid::Error_Inner(Array3D* phi, Array3D* rho, Array3D* elec, Array3D
 		{
 		  rhosum = rho->data[ind];
 		}
-	      if (k < eps->nz - 1)
-		{
-		  apx = (eps->data[ind] + eps->data[indpx]) / 2.0;
-		  amx = (eps->data[ind] + eps->data[indmx]) / 2.0;	      
-		  apy = (eps->data[ind] + eps->data[indpy]) / 2.0;
-		  amy = (eps->data[ind] + eps->data[indmy]) / 2.0;	      
-		  apz = (eps->data[ind] + eps->data[indpz]) / 2.0;
-		  amz = (eps->data[ind] + eps->data[indmz]) / 2.0;	      
-		}
-	      else
-		{
-		  apx = 1.0; amx = 1.0; apy = 1.0; amy = 1.0; apz = 1.0; amz = 1.0;
-		}
-	      w6 = 1.0 / (apx + amx + apy + amy + apz * phi->zplus[k] + amz * phi->zminus[k]);
-	      newphi = w6 * (amx * phi->data[indmx] + apx * phi->data[indpx] + amy * phi->data[indmy] + apy * phi->data[indpy] + amz * phi->zminus[k] * phi->data[indmz] + apz * phi->zplus[k] * phi->data[indpz] + hsquared * rhosum);
+	      w6 = 1.0 / (4.0 + phi->zplus[k] + phi->zminus[k]);
+	      newphi = w6 * (phi->data[indmx] + phi->data[indpx] + phi->data[indmy] + phi->data[indpy] + phi->zminus[k] * phi->data[indmz] + phi->zplus[k] * phi->data[indpz] + hsquared * rhosum);
 	      error = max(error, fabs(phi->data[ind] - newphi));
 	    }
 	}
@@ -1874,89 +1373,25 @@ void MultiGrid::Prolongate(Array3D* phi, Array3D* newphi, Array3D* elec, Array3D
 
 
 
-void MultiGrid::VCycle_Inner(Array3D** phi, Array3D** rho, Array3D** elec, Array3D** hole, Array3D** eps, Array2DInt** BCType, Array2D** QFe, Array2D** QFh, Array2DInt** Ckmin, Array2DInt** Vkmin, int run, int stepstart)
+void MultiGrid::VCycle_Inner(Array3D** phi, Array3D** rho, Array3D** elec, Array3D** hole, Array2DInt** BCType, Array2D** QFe, Array2D** QFh, Array2DInt** Ckmin, Array2DInt** Vkmin, int run, int stepstart)
 {
   // This controls the running of the SOR iterations atall grid scales.
   // It does a given number of steps (niter) at each scale  as it moves to finer and finer scales.
   int i, j, niter, NumSOR;
   double error = 100.0, AveIterations;
-  bool PixelsFilled = false;  // Stores whether the pixels have been filled with electrons in ElectronMethod = 2
   for (i=stepstart; i>-1; i--)
     {
       niter = ncycle * (int)pow(4,i);      
       NumSOR = 0;
       AveIterations = 0;
-      if (ElectronMethod == 2)
-	{
-	  if (PixelsFilled)
-	    {
-	      //printf("Pixels are already filled, nz = %d, i = %d\n",rho[i]->nz,i);
-	      // If the pixels have been filled at a coarser grid, Prolongate the electrons up to
-	      // the current grid and find the solution.
-	      FillElectronWells(rho[i], elec[i], Ckmin[i], 0.0);// Empty the wells 	  	  
-	      Prolongate(phi[i+1], phi[i], elec[i+1], elec[i], BCType[i], Vkmin[i], Ckmin[i]);
-	    }
-	  else if (GridsPerPixelX / (int)pow(2,i) < 8 || GridsPerPixelY / (int)pow(2,i) < 8)
-	    {
-	      // If the pixels haven't been filled, we don't want to fill them until the pixels
-	      // are at least 8 grid cells wide.  Otherwise, there is not yet a well-defined
-	      // collection region, and the electrons will "leak out".
-	      //printf("Pixel less than 8 grid cells, nz = %d, i = %d\n",rho[i]->nz,i);	      
-	      if (i < stepstart)
-		{
-		  // After we have done the corsest grid, we need to Prolongate the solution up and re-solve.
-		  FillElectronWells(rho[i], elec[i], Ckmin[i], 0.0);// Empty the wells 	  	  		  
-		  Prolongate(phi[i+1], phi[i], elec[i+1], elec[i], BCType[i], Vkmin[i], Ckmin[i]);
-		}
-	      else
-		{
-		  // No need to Prolongate if it's the coarsest grid
-		  FillElectronWells(rho[i], elec[i], Ckmin[i], 0.0);// Empty the wells 	  	  		  
-		}
-	    }
-	  else
-	    {
-	      //printf("Pixel >= 8 grid cells, but not yet filled, nz = %d, i = %d\n",rho[i]->nz,i);	      	      
-	      if (i < stepstart)
-		{
-		  // This is the case when we are filling the pixels for the first time.
-		  // If it's not the coarsest grid, we Prolongate the solution up and re-solve
-		  // to generate an approximate solution before filling the wells.
-		  Prolongate(phi[i+1], phi[i], elec[i+1], elec[i], BCType[i], Vkmin[i], Ckmin[i]);
-		  for (j=0; j<niter; j++)
-		    {
-		      AveIterations = SOR_Inner(phi[i], rho[i], elec[i], hole[i], eps[i], BCType[i], QFe[i], QFh[i], Ckmin[i], Vkmin[i]);
-		      NumSOR += 1;
-		    }
-		  FillElectronWells(rho[i], elec[i], Ckmin[i], 1.0);// Fill the wells 	  	  		  
-		}
-	      else
-		{
-		  // This is the case when we are filling the pixels for the first time.
-		  // If it's the coarsest grid, we generate an approximate solution before filling the wells.
-		  for (j=0; j<niter; j++)
-		    {
-		      AveIterations = SOR_Inner(phi[i], rho[i], elec[i], hole[i], eps[i], BCType[i], QFe[i], QFh[i], Ckmin[i], Vkmin[i]);
-		      NumSOR += 1;
-		    }
-		  FillElectronWells(rho[i], elec[i], Ckmin[i], 1.0);// Fill the wells 	  	  		  
-		}
-	      PixelsFilled = true; // Set this to true so we don't fill them again.
-	    }
-	}
-      else if (i < stepstart)
-	{
-	  // Only Prolongate if it's not the coarsest grid.
-	  Prolongate(phi[i+1], phi[i], elec[i+1], elec[i], BCType[i], Vkmin[i], Ckmin[i]);
-	}
       for (j=0; j<niter; j++)
 	{
 	  // Now here's where we really generate the solution at this grid.
-	  AveIterations = SOR_Inner(phi[i], rho[i], elec[i], hole[i], eps[i], BCType[i], QFe[i], QFh[i], Ckmin[i], Vkmin[i]);
+	  AveIterations = SOR_Inner(phi[i], rho[i], elec[i], hole[i], BCType[i], QFe[i], QFh[i], Ckmin[i], Vkmin[i]);
 	  NumSOR += 1;
 	}
       // And here's where we evaluate the residual error.
-      error = Error_Inner(phi[i], rho[i], elec[i], hole[i], eps[i], BCType[i], Vkmin[i]);      
+      error = Error_Inner(phi[i], rho[i], elec[i], hole[i], BCType[i], Vkmin[i]);      
       if(VerboseLevel > 1)
 	{
 	  printf("Completed iterations at resolution %dx%dx%d. Number of steps = %d. Error = %.3g Ave inner iterations = %.2f\n",phi[i]->nx-1,phi[i]->ny-1,phi[i]->nz-1,j,error,AveIterations/(double)NumSOR);
@@ -1973,14 +1408,12 @@ void MultiGrid::VCycle_Inner(Array3D** phi, Array3D** rho, Array3D** elec, Array
 	  WriteOutputFile(outputfiledir, outputfilebase+"_Multi_"+istepnum+"_"+StepNum, "Hole", elec[i]);
 	  if (VerboseLevel > 2)
 	    {
-	      WriteOutputFile(outputfiledir, outputfilebase+"_Multi_"+istepnum+"_"+StepNum, "eps", eps[i]);	  
 	      Write2DFile(outputfiledir, outputfilebase+"_Multi_"+istepnum+"_"+StepNum, "QFe", QFe[i]);
 	      Write2DFile(outputfiledir, outputfilebase+"_Multi_"+istepnum+"_"+StepNum, "QFh", QFh[i]);
 	      Write2DIntFile(outputfiledir, outputfilebase+"_Multi_"+istepnum+"_"+StepNum, "BCType", BCType[i]);
 	      Write2DIntFile(outputfiledir, outputfilebase+"_Multi_"+istepnum+"_"+StepNum, "Vkmin", Vkmin[i]);
 	      Write2DIntFile(outputfiledir, outputfilebase+"_Multi_"+istepnum+"_"+StepNum, "Ckmin", Ckmin[i]);
 	    }
-	  
 	}
     }
   return;
@@ -2206,8 +1639,8 @@ void MultiGrid::Trace(double* point, int bottomsteps, bool savecharge, double bo
   double mu, E2, Emag, ve, vth, tau, Tscatt;
   double theta, phiangle, zmin, zmax, zbottom;
   zmax = SensorThickness;
-  zmin = E[0]->z[Channelkmin] + 2.0 * FieldOxide; // Roughly the top of the collection region
-  zbottom = E[0]->zmz[Channelkmin] + 0.01;
+  zmin = ContactDepth;
+  zbottom = 0.0;
   double*  E_interp = new double[3];
   E2 = 0.0;
   for (i=0; i<3; i++)
@@ -2283,6 +1716,7 @@ void MultiGrid::Trace(double* point, int bottomsteps, bool savecharge, double bo
 	    {
 	      break; // Electron recombines if it encounters free holes.
 	    }
+	  /*
 	  if (savecharge && ElectronMethod != 0)
 	    {
 	      // Find the pixel the charge is in and add 1 electron to it.
@@ -2292,7 +1726,7 @@ void MultiGrid::Trace(double* point, int bottomsteps, bool savecharge, double bo
 	      if (j >= 0 && j < PixelBoundaryNx * PixelBoundaryNy)   CollectedCharge[0][j] += 1;
 	      phase = 4;
 	      break;
-	    }
+	      }*/
 	  if (i > 0 && i < elec[0]->nx-1 && j > 0 && j < elec[0]->ny-1 && k < elec[0]->nz-1 && savecharge && ElectronMethod == 0)
 	    {
 	      elec[0]->data[i + j * elec[0]->nx + k * elec[0]->nx * elec[0]->ny] += bottomcharge;// Add bottomcharge to this grid cell
@@ -2394,75 +1828,8 @@ void MultiGrid::TraceSpot(int m)
   return;
 }
 
-
-void MultiGrid::TraceFringes(int m)
-{
-  // This traces a random set of starting electron locations in a fringe pattern
-  double x, y, z, boxx, boxy, FringeLength, theta;
-  double bottomcharge = 1.0 / (double)BottomSteps;
-  int n, ntrials;
-  bool Reject;
-  boxx = PixelBoundaryUpperRight[0] - PixelBoundaryLowerLeft[0];
-  boxy = PixelBoundaryUpperRight[1] - PixelBoundaryLowerLeft[1];
-  double* point = new double[3];
-  string underscore = "_", slash = "/", name = "Pts";
-  string StepNum = std::to_string(m);
-  string filename = (outputfiledir+slash+outputfilebase+underscore+StepNum+underscore+name+".dat");
-  ofstream file;
-  file.open(filename.c_str());
-  file.setf(ios::fixed);
-  file.setf(ios::showpoint);
-  file.setf(ios::left);
-  file.precision(4);
-  // Write header line.
-  file << setw(8) << "id" << setw(8) << "step" << setw(3) << "ph"
-       << setw(15) << "x" << setw(15) << "y" << setw(15) << "z" << endl;
-  // If LogPixelPaths > 1, then we only log some pixel paths
-  int OldLogPixelPaths = LogPixelPaths;
-  if (LogPixelPaths != 0)
-    {
-      if (m % LogPixelPaths == 0)
-	{
-	  LogPixelPaths = 1;
-	}
-      else
-	{
-	  LogPixelPaths = 0;
-	}
-    }
-  ntrials = 0;
-  for (n=0; n<NumElec; n++)
-    {
-      if (n%1000==0)
-	{
-	  if (VerboseLevel > 1) printf("In TraceRegion. Finished %d electrons\n",n);
-	}
-      Reject=true;
-      while (Reject) // Rejection sampling
-	{
-	  ntrials += 1;
-	  x = PixelBoundaryLowerLeft[0] + drand48() * boxx + Xoffset;
-	  y = PixelBoundaryLowerLeft[1] + drand48() * boxy + Yoffset;
-	  theta = atan2(y, x);
-	  FringeLength = sqrt(x*x + y*y) * cos(theta - FringeAngle * pi / 180.0);
-
-	  if (1.0 + cos(FringeLength / FringePeriod * 2.0 * pi) > 2.0 * drand48()) Reject = false;
-	}
-
-      z = ElectronZ0Fill;
-      point[0] = x;
-      point[1] = y;
-      point[2] = z;
-      Trace(point, BottomSteps, true, bottomcharge, file);
-    }
-  file.close();
-  printf("Finished writing grid file - %s. n = %d, ntrials = %d\n",filename.c_str(),n, ntrials);
-  fflush(stdout);
-  delete[] point;
-  LogPixelPaths = OldLogPixelPaths;  
-  return;
-}
-
+/*
+Commenting this out for now
 void MultiGrid::TraceFe55Cloud(int m)
 {
   // This generates an Fe55 charge cloud and traces all electrons in the cloud
@@ -2752,7 +2119,7 @@ void MultiGrid::TraceFe55Cloud(int m)
   delete[] r;  
   return;
 }
-
+*/
 void MultiGrid::TraceList(int m)
 {
   // This runs a list of photons from a list
@@ -2760,7 +2127,7 @@ void MultiGrid::TraceList(int m)
   fflush(stdout);
 
   double x, y, z, zbottom, xcenter, ycenter, abs_length, path_length;
-  zbottom = E[0]->zmz[Channelkmin] + 0.01;
+  zbottom = 0.0;
   int n, nlist;
   double bottomcharge = 1.0 / (double)BottomSteps;
   double* point = new double[3];
@@ -3223,7 +2590,7 @@ double MultiGrid::mu_Si (double E,double T)
 void MultiGrid::Set_QFh(Array2D** QFh)
 {
   //Set hole quasi-Fermi level in the region.
-  int i, j, m, n, index;
+  int i, j, n, index;
   for (n=0; n<nsteps+1; n++)
     {
       for (i=0; i<QFh[n]->nx; i++)
@@ -3236,6 +2603,8 @@ void MultiGrid::Set_QFh(Array2D** QFh)
 	}
     }
   // Set QFh in the Fixed Voltage regions
+  // Commented out for now
+  /*
   for (m=0; m<NumberofFixedRegions; m++)
     {
       for (n=0; n<nsteps+1; n++)
@@ -3254,16 +2623,15 @@ void MultiGrid::Set_QFh(Array2D** QFh)
 	    }
 	}
     }
+  */
   fflush(stdout);
   return;
-  }
+}
 
-void MultiGrid::Adjust_QFe(Array2D** QFe, Array3D** elec, Array2DInt** Ckmin)
+void MultiGrid::Set_QFe(Array2D** QFe)
 {
-  // Set electron quasi-Fermi level in the region to give the desired number of electrons
-  int i, j, k, n, m, q, index, index2, imin, imax, jmin, jmax, PixX, PixY;
-  double PixXmin, PixXmax, PixYmin, PixYmax, TotalElectrons = 0.0;
-  // First clear the array
+  //Set hole quasi-Fermi level in the region.
+  int i, j, n, index;
   for (n=0; n<nsteps+1; n++)
     {
       for (i=0; i<QFe[n]->nx; i++)
@@ -3271,18 +2639,13 @@ void MultiGrid::Adjust_QFe(Array2D** QFe, Array3D** elec, Array2DInt** Ckmin)
 	  for (j=0; j<QFe[n]->ny; j++)
 	    {
 	      index = i + j * QFe[n]->nx;
-	      if (ElectronMethod == 2)
-		{
-		  // Use this large value to recognize use of ElectronMethod 2.
-		  QFe[n]->data[index] = 1.0E6;
-		}
-	      else
-		{
-		  QFe[n]->data[index] = 100.0;
-		}
+	      QFe[n]->data[index] = qfe;
 	    }
 	}
     }
+  // Set QFe in the Fixed Voltage regions
+  // Commented out for now
+  /*
   // Set QFe in the Fixed Voltage regions
   for (m=0; m<NumberofFixedRegions; m++)
     {
@@ -3299,304 +2662,68 @@ void MultiGrid::Adjust_QFe(Array2D** QFe, Array3D** elec, Array2DInt** Ckmin)
 	    }
 	}
     }
-  if (ElectronMethod != 1)
-    {
-      //Not using QFe to calculate electrons in pixels.
-      return;
-    }
-  // If ElectronMethod == 1, continue with setting QFe
-  // Now count the electrons in the pixel regions.
-  for (m=0; m<NumberofPixelRegions; m++)
-    {
-      for (q=0; q<NumberofFilledWells[m]; q++)
-	{
-	  // First figure out the pixel coordinates
-	  PixX = (int)floor((FilledPixelCoords[m][q][0] - PixelRegionLowerLeft[m][0]) / PixelSizeX);
-	  PixY = (int)floor((FilledPixelCoords[m][q][1] - PixelRegionLowerLeft[m][1]) / PixelSizeY);
-	  PixXmin = PixelRegionLowerLeft[m][0] + (double)PixX * PixelSizeX;
-	  PixYmin = PixelRegionLowerLeft[m][1] + (double)PixY * PixelSizeY;
-	  PixXmax = PixXmin + PixelSizeX;
-	  PixYmax = PixYmin + PixelSizeY;	      
-	  for (n=0; n<nsteps+1; n++)
-	    {
-	      imin = elec[n]->XIndex(PixXmin);
-	      imax = elec[n]->XIndex(PixXmax);
-	      jmin = elec[n]->YIndex(PixYmin);
-	      jmax = elec[n]->YIndex(PixYmax);
-	      // Then count how many electrons currently in the pixel
-	      ElectronCount[m][n * NumberofFilledWells[m] + q] = 0.0;
-	      for (i=imin; i<imax; i++)
-		{
-		  for (j=jmin; j<jmax; j++)
-		    {
-		      index = i + j * elec[n]->nx;
-		      for (k=Ckmin[n]->data[index]; k<elec[n]->nz; k++)
-			{
-			  index2 = index + k * elec[n]->nx * elec[n]->ny;
-			  ElectronCount[m][n * NumberofFilledWells[m] + q] += elec[n]->data[index2];
-			  TotalElectrons +=  elec[n]->data[index2];
-			  if (BuildQFeLookup == 1)
-			    {
-			      elec[n]->data[index2] = 0.0; // Clear the electrons if building the lookup table
-			    }
-			}
-		    }
-		}
-
-	      if (VerboseLevel > 2) printf("In Adjust_QFe. n = %d,m=%d,q=%d,PixX = %.1f, Pixy = %.1f, Desired Electrons = %d, ElecCount = %.4f, QFe = %.4f\n",n,m,q,FilledPixelCoords[m][q][0], FilledPixelCoords[m][q][1], CollectedCharge[m][q], ElectronCount[m][n*NumberofFilledWells[m]+q], PixelQFe[m][n*NumberofFilledWells[m]+q]);
-	      if (BuildQFeLookup == 1)
-		{
-		  PixelQFe[m][n * NumberofFilledWells[m] + q] = QFemin + (QFemax - QFemin) / (double)NQFe * (double)q;
-		  QFeLookup[n * NumberofFilledWells[m] + q] = ElectronCount[m][n * NumberofFilledWells[m] + q];
-		  if (VerboseLevel > 2) printf("In Adjust_QFe. PixX = %.1f, Pixy = %.1f, ElecCount = %.4f, QFe = %.4f\n",FilledPixelCoords[m][q][0], FilledPixelCoords[m][q][1], ElectronCount[m][n*NumberofFilledWells[m]+q], PixelQFe[m][n*NumberofFilledWells[m]+q]);
-		}
-	      else
-		{
-		  PixelQFe[m][n * NumberofFilledWells[m] + q] = ElectronQF(CollectedCharge[m][q], n);
-		}
-	      if (VerboseLevel > 2) printf("In Adjust_QFe. n=%d,m=%d,q=%d,PixX = %.1f, Pixy = %.1f, Desired Electrons = %d, ElecCount = %.4f, QFe = %.4f\n",n,m,q,FilledPixelCoords[m][q][0], FilledPixelCoords[m][q][1], CollectedCharge[m][q], ElectronCount[m][n * NumberofFilledWells[m] + q], PixelQFe[m][n * NumberofFilledWells[m] + q]);  
-	      // Now set pixel QFe to calculated value
-	      for (i=imin; i<imax; i++)
-		{
-		  for (j=jmin; j<jmax; j++)
-		    {
-		      index = i + j * QFe[n]->nx;
-		      QFe[n]->data[index] = PixelQFe[m][n * NumberofFilledWells[m] + q];
-		    }
-		}
-	    }
-	}
-    }
-  printf("Finished AdjustQFe, Total Electrons = %.0f\n",TotalElectrons);
+  */
+  fflush(stdout);
   return;
-}
+  }
 
-double MultiGrid::ElectronQF(int ne, int n)
 
-// Looks up QFe from the QFeLookup table
-// With interpolation.
+
+
+void MultiGrid::Setkmins(Array3D** rho, Array2DInt** Ckmin, Array2DInt** Vkmin)
 {
-  int i = 0;
-  double dne, qf, dqf;
-  dqf = (QFemax - QFemin) / ((double)NQFe - 1.0);  
-  if (ne < 1)
-    {
-      return 100.0;
-    }
-  dne = (double)ne;
-  if (ne > QFeLookup[n * NQFe])
-    {
-      // Ne larger than largest value in lookup table
-      // Extrapolate from last two values
-      qf = QFemin - dqf / (QFeLookup[n * NQFe] - QFeLookup[n * NQFe + 1]) * (dne - QFeLookup[n * NQFe]);
-      if (VerboseLevel > 2) printf("In QFe lookup 0, ne = %d, i = %d, qf = %f\n", ne, i, qf); 
-    }
-  else
-    {
-      // Find Ne in the table
-      for (i=0; i<NQFe-1; i++)
-	{
-	  if (ne < QFeLookup[n * NQFe + i] && ne > QFeLookup[n * NQFe + i + 1])
-	    {
-	      break;
-	    }
-	}
-      if (ne > 1000)  
-	{
-	  // Ne in table, but larger than 1000
-	  // Use linear interpolation
-	  qf = QFemin + (double)i * dqf - dqf / (QFeLookup[n * NQFe + i] - QFeLookup[n * NQFe + i + 1]) * (dne - QFeLookup[n * NQFe + i]);
-	  if (VerboseLevel > 2) printf("In QFe lookup 1, ne = %d, i = %d, qfi = %f, qfi+1 = %f, qf = %f\n", ne, i, QFeLookup[i], QFeLookup[i+1], qf); 
-	}
-      else
-	{
-	  // Ne in table, but less than 1000
-	  // Use log interpolation
-	  // TODO need to add a test for log(0)
-	  qf = QFemin + (double)i * dqf - dqf / (log(QFeLookup[n * NQFe + i]) - log(QFeLookup[n * NQFe + i + 1])) * (log(dne) - log(QFeLookup[n * NQFe + i]));
-	  if (VerboseLevel > 2) printf("In QFe lookup 2, ne = %d, i = %d, qfi = %f, qfi+1 = %f, qf = %f\n", ne, i, QFeLookup[i], QFeLookup[i+1], qf); 
-	}
-    }
-  return max(0.0,min(100.0,qf));
-}
-
-
-
-void MultiGrid::Setkmins(Array3D** rho, Array3D** phi, Array3D** eps, Array2DInt** Ckmin, Array2DInt** Vkmin)
-{
-  // This sets the kmin values, as well as calculating the epsilon values in the oxide regions
+  // This sets the kmin values.
   // Vkmin is the lowest z location where the potential is updated.
-  // Below Vkmin are the gates, which are at a fixed, unchanging potential.
   // Ckmin is the lowest z location where charges can accumulate.
   // Between Ckmin and Vkmin is the oxide region.
-  int i, j, k, m, n, index, index2, PixX, Chkmin, Vokmin, NLeft=0, NRight=0, NTaper=0, LastCS=0, LastC=0;
-  int gox_min_k, fox_min_k;
-  double gox_error, fox_error;
-  double PixXmin, TaperRatio, gox_eff=0.0, fox_eff=0.0, eps_factor_g[nsteps+1], eps_factor_f[nsteps+1], eps_factor, NGoxCells, NFoxCells;
-  // First, set to epsilon to nominal values everywhere
-  // The silicon dielectric constant is incorporated elsewhere, so epsilon = 1.0 in the silicon,
-  // and epsilon = EPSILON_OX / EPSILON_SI in the oxide region.
-  for (n=0; n<nsteps+1; n++)
-    {
-      for (i=0; i<phi[n]->nx; i++)
-	{
-	  for (j=0; j<phi[n]->ny; j++)
-	    {
-	      index = i + j * phi[n]->nx;
-	      Ckmin[n]->data[index] = 1;
-	      Vkmin[n]->data[index] = 1;	  
-	      for (k=0; k<eps[n]->nz; k++)
-		{
-		  index2 = index + k * eps[n]->nx * eps[n]->ny;
-		  eps[n]->data[index2] = 1.0;
-		}
-	    }
-	}
-    }
-  // Set up the basic geometry
-  for (n=0; n<nsteps+1; n++)
-    {
-      rho[n]->ChannelStopVkmin = 1;
-      rho[n]->ChannelVkmin = max(1,rho[n]->ZIndex(FieldOxide / 2.0));
-      // Find Ckmin which minimizes the Gox and Fox errors
-      // Force thicknesses to be greater than requested
-      gox_error = 100.0; fox_error = 100.0; gox_min_k = 2; fox_min_k = 2;
-      for (k=2; k<eps[n]->nz; k++)
-	{
-	  gox_eff = rho[n]->zmz[k] - rho[n]->zpz[rho[n]->ChannelVkmin-1];
-	  fox_eff = (rho[n]->zmz[k] - rho[n]->zpz[rho[n]->ChannelStopVkmin-1]);
-	  if (k > rho[n]->ChannelVkmin && gox_eff > GateOxide && fabs(gox_eff - GateOxide) / GateOxide < gox_error)
-	    {
-	      gox_error = fabs(gox_eff - GateOxide) / GateOxide;
-	      gox_min_k = k;
-	    }
-	  if (fox_eff > FieldOxide && fabs(fox_eff - FieldOxide) / FieldOxide < fox_error)
-	    {
-	      fox_error = fabs(fox_eff - FieldOxide) / FieldOxide;
-	      fox_min_k = k;
-	    }
-	}
-      rho[n]->ChannelStopCkmin = fox_min_k;
-      rho[n]->ChannelCkmin = gox_min_k;
-      gox_eff = rho[n]->zmz[rho[n]->ChannelCkmin] - rho[n]->zpz[rho[n]->ChannelVkmin-1];
-      fox_eff = (rho[n]->zmz[rho[n]->ChannelStopCkmin] - rho[n]->zpz[rho[n]->ChannelStopVkmin-1]);
-      // These are the effective oxide thicknesses, which differ from what is requested
-      // due to finite grid resolution.  The below semi-empirical "fudge-factors" are
-      // used to tweak the epsilon values to compensate for the finite grid resolution of the
-      // oxide thicknesses.  This speeds convergence considerably
-      // and makes sure that the effective capacitance matches what it should be.
-      // The first term compensates for any error in the effective thickness, and
-      // the second term (small) compensates for the finite width of the surface charge layer.
-      NGoxCells = (double)(rho[n]->ChannelCkmin - rho[n]->ChannelVkmin);
-      NFoxCells = (double)(rho[n]->ChannelStopCkmin - rho[n]->ChannelStopVkmin);
-      eps_factor_g[n] = 1.0 + 3.8 * (gox_eff - GateOxide) / (GateOxide * NGoxCells) + 0.09 * rho[n]->zw[rho[n]->ChannelCkmin] / GateOxide;
-      eps_factor_f[n] = 1.0 + 3.8 * (fox_eff - FieldOxide) / (FieldOxide * NFoxCells) + 0.09 * rho[n]->zw[rho[n]->ChannelCkmin] / FieldOxide;
-      // Make sure these correction factors don't get too wild
-      eps_factor_g[n] = max(0.25, min(100.0, eps_factor_g[n]));
-      eps_factor_f[n] = max(0.50, min(2.0, eps_factor_f[n]));
-      if (VerboseLevel > 2) printf("In Setkmins. n = %d, gox_eff = %f, fox_eff = %f, NGoxCells = %f, NFoxCells = %f, eps_factor_g = %f, eps_factor_f = %f\n",n,gox_eff, fox_eff, NGoxCells, NFoxCells, eps_factor_g[n], eps_factor_f[n]);
-      if (VerboseLevel > 2) printf("In Setkmins. n = %d, CSVkmin = %d, CSCkmin = %d CVkmin = %d, CCkmin = %d\n",n,rho[n]->ChannelStopVkmin,rho[n]->ChannelStopCkmin,rho[n]->ChannelVkmin,rho[n]->ChannelCkmin);
-      phi[n]->ChannelStopVkmin = rho[n]->ChannelStopVkmin;
-      phi[n]->ChannelStopCkmin = rho[n]->ChannelStopCkmin;
-      phi[n]->ChannelVkmin = rho[n]->ChannelVkmin;
-      phi[n]->ChannelCkmin = rho[n]->ChannelCkmin;  
-      if (VerboseLevel > 2) printf("In Setkmins. n = %d, CSVkmin = %d, CSCkmin = %d CVkmin = %d, CCkmin = %d\n",n,rho[n]->ChannelStopVkmin,rho[n]->ChannelStopCkmin,rho[n]->ChannelVkmin,rho[n]->ChannelCkmin);
-    }
+  int i, j, m, n, index, PixX, PixY;
+  double PixXmin, PixYmin, ContactXmin, ContactXmax, ContactYmin, ContactYmax;
+  // Set Ckmin and Vkmin in pixel region.
   for (m=0; m<NumberofPixelRegions; m++)
     {
       for (n=0; n<nsteps+1; n++)
 	{
-	  // Count the width in grid of the taper regions
-	  NLeft = 0; NRight = 0;
 	  for (i=0; i<rho[n]->nx; i++)
 	    {
-	      if (rho[n]->x[i] >= PixelRegionLowerLeft[m][0] && rho[n]->x[i] <= PixelRegionUpperRight[m][0])
+	      if (rho[n]->x[i] < PixelRegionLowerLeft[m][0] || rho[n]->x[i] > PixelRegionUpperRight[m][0])
 		{
-		  PixX = (int)floor((rho[n]->x[i] - PixelRegionLowerLeft[m][0]) / PixelSizeX);
-		  PixXmin = PixelRegionLowerLeft[m][0] + (double)PixX * PixelSizeX;
-		  if (PixX !=0) continue;
-		  if (rho[n]->x[i] <= PixXmin + ChannelStopWidth/2.0 || rho[n]->x[i] >= PixXmin + PixelSizeX - ChannelStopWidth/2.0)
-		    {
-		      // Channel Stop region
-		      continue;
-		    }
-		  else if (rho[n]->x[i] <= PixXmin + ChannelStopWidth/2.0 + FieldOxideTaper)
-		    {
-		      // Left side taper
-		      if (VerboseLevel > 2) printf("In Setkmins. Setting Tapers. n = %d, i = %d, Left\n",n,i);
-		      NLeft += 1;
-		    }
-		  else if (rho[n]->x[i] >= PixXmin + PixelSizeX - ChannelStopWidth/2.0 - FieldOxideTaper)
-		    {
-		      // Right side taper
-		      if (VerboseLevel > 2) printf("In Setkmins. Setting Tapers. n = %d, i = %d, Right\n",n,i);
-		      NRight += 1;
-		    }
-		  else
-		    {
-		      // Channel region
-		      continue;
-		    }
+		  continue; // If not in PixelRegion, continue
 		}
-	    }
-	  if (NLeft == NRight)  NTaper = NLeft;
-	  else NTaper = max(NLeft, NRight);
-	  if (VerboseLevel > 2) printf("In Setkmins. n = %d, NTaper = %d \n",n,NTaper);
-	  for (i=0; i<rho[n]->nx; i++)
-	    {
-	      if (rho[n]->x[i] >= PixelRegionLowerLeft[m][0] && rho[n]->x[i] <= PixelRegionUpperRight[m][0])
+	      PixX = (int)floor((rho[n]->x[i] - PixelRegionLowerLeft[m][0]) / PixelSizeX);
+	      PixXmin = PixelRegionLowerLeft[m][0] + (double)PixX * PixelSizeX;
+	      ContactXmin = PixXmin + (PixelSizeX - ContactWidth) / 2.0;
+	      ContactXmax = ContactXmin + ContactWidth;
+	      for (j=0; j<rho[n]->ny; j++)
 		{
-		  PixX = (int)floor((rho[n]->x[i] - PixelRegionLowerLeft[m][0]) / PixelSizeX);
-		  PixXmin = PixelRegionLowerLeft[m][0] + (double)PixX * PixelSizeX;
-		  if (rho[n]->x[i] <= PixXmin + ChannelStopWidth/2.0 || rho[n]->x[i] >= PixXmin + PixelSizeX - ChannelStopWidth/2.0)
+		  if (rho[n]->y[j] < PixelRegionLowerLeft[m][1] || rho[n]->y[j] > PixelRegionUpperRight[m][1])
 		    {
-		      // Channel Stop region
-		      TaperRatio = 1.0;
-		      LastCS = i;
+		      continue; // If not in PixelRegion, continue
 		    }
-		  else if (rho[n]->x[i] <= PixXmin + ChannelStopWidth/2.0 + FieldOxideTaper)
+		  index = i + j * rho[n]->nx;
+		  PixY = (int)floor((rho[n]->y[j] - PixelRegionLowerLeft[m][1]) / PixelSizeY);
+		  PixYmin = PixelRegionLowerLeft[m][1] + (double)PixY * PixelSizeY;
+		  ContactYmin = PixYmin + (PixelSizeY - ContactHeight) / 2.0;
+		  ContactYmax = ContactYmin + ContactHeight;
+		  if (rho[n]->x[i] >= ContactXmin && rho[n]->x[i] <= ContactXmax && rho[n]->y[j] >= ContactYmin && rho[n]->y[j] <= ContactYmax)
 		    {
-		      // Left side taper		      
-		      TaperRatio = 1.0 - (double)(i - LastCS) / (double)(NTaper + 1);
-		    }
-		  else if (rho[n]->x[i] >= PixXmin + PixelSizeX - ChannelStopWidth/2.0 - FieldOxideTaper)
-		    {
-		      // Right side taper		      		      
-		      TaperRatio = (double)(i - LastC) / (double)(NTaper + 1);
+		      // In contact region
+		      Ckmin[n]->data[index] = 0;
+		      Vkmin[n]->data[index] = 0;
 		    }
 		  else
 		    {
-		      // Channel region
-		      TaperRatio = 0.0;
-		      LastC = i;
-		    }
-		  Chkmin = rho[n]->ChannelCkmin + (int)round((TaperRatio * (double)(rho[n]->ChannelStopCkmin - rho[n]->ChannelCkmin)));
-		  Vokmin = rho[n]->ChannelVkmin + (int)round((TaperRatio * (double)(rho[n]->ChannelStopVkmin - rho[n]->ChannelVkmin)));
-		  if (VerboseLevel > 2) printf("In Setkmins. n = %d, i = %d, x=%f, TaperRatio = %f, LastC=%d, LastCS=%d, Ckmin = %d, Vkmin = %d\n",n,i,rho[n]->x[i],TaperRatio,LastC, LastCS,Chkmin, Vokmin);
-		  // Now fill the epsilon, Ckmin, and Vkmin arrays
-		  eps_factor =  eps_factor_g[n] + TaperRatio * (eps_factor_f[n] - eps_factor_g[n]);
-		  if (VerboseLevel > 2) printf("In Setkmins. n = %d, i = %d, x = %f, TaperRatio = %f, eps_factor = %f\n",n,i,rho[n]->x[i],TaperRatio,eps_factor);
-
-		  for (j=0; j<eps[n]->ny; j++)
-		    {
-		      index = i + j * rho[n]->nx;
-		      if (rho[n]->y[j] >= PixelRegionLowerLeft[m][1] && rho[n]->y[j] <= PixelRegionUpperRight[m][1])
-			{
-			  Ckmin[n]->data[index] = Chkmin;
-			  Vkmin[n]->data[index] = Vokmin;	  
-			  for (k=Vkmin[n]->data[index]; k<Ckmin[n]->data[index]; k++)
-			    {
-			      index2 = index + k * eps[n]->nx * eps[n]->ny;
-			      eps[n]->data[index2] = EPSILON_OX / EPSILON_SI * eps_factor;
-			      if (VerboseLevel > 2 && j==48 && (i>41 && i<55)) printf("In Setkmins. n=%d, i=%d, j=%d, k=%d, Ckmin = %d, Vkmin = %d, eps = %f\n",n,i,j,k,Ckmin[n]->data[index], Vkmin[n]->data[index], eps[n]->data[index2]);
-			    }
-			}
+		      // Between contacts
+		      Ckmin[n]->data[index] = BottomOxide;
+		      Vkmin[n]->data[index] = 0.0;
 		    }
 		}
 	    }
 	}
     }
+  
   // Now fill Ckmin and Vkmin in the fixed regions
+  // Comment this out for now
+  /*
   for (m=0; m<NumberofFixedRegions; m++)
     {
       for (n=0; n<nsteps+1; n++)
@@ -3650,6 +2777,8 @@ void MultiGrid::Setkmins(Array3D** rho, Array3D** phi, Array3D** eps, Array2DInt
 	    }
 	}
     }
+  */
+	      
   // Check that there are no negative values
   for (n=0; n<nsteps+1; n++)
     {
@@ -3713,10 +2842,10 @@ void MultiGrid::CountCharges(Array3D** rho, Array3D** elec, Array3D** hole)
   return;
 }
 
-void MultiGrid::SetCharge(Array3D* rho, Array2DInt* Ckmin, int i, int j, int region, double TaperRatio)
+void MultiGrid::SetCharge(Array3D* rho, Array2DInt* Ckmin, int i, int j, int region)
 {
   // This sets the charge in the region at location i,j
-  // if region=1 => Channel, region=2 => ChannelStop
+  // if region=1 => Contact
   int m, k, index, index2, Profile, kmax;
   index = i + j * rho->nx;
   double Depth, ChargeDepth, ChargeFactor =  (QE*MICRON_PER_M/(EPSILON_0*EPSILON_SI)) / pow(MICRON_PER_CM, 3);
@@ -3725,23 +2854,11 @@ void MultiGrid::SetCharge(Array3D* rho, Array2DInt* Ckmin, int i, int j, int reg
   double Zmin, Zmax, Total;
   double Qss=0.0;
   
-  if (region == 1)  // Channel region
+  if (region == 1)  // Contact region
     {
-      Profile = ChannelProfile;
-      Depth = ChannelDepth;
-      Charge = ChannelDoping * MICRON_PER_CM  * ChargeFactor;
-    }
-  else if (region == 2)  // Channel stop region
-    {
-      Profile = ChannelStopProfile;
-      Depth = ChannelStopDepth;
-      Charge = ChannelStopDoping * MICRON_PER_CM  * ChargeFactor;
-    }
-  else if (region == 3) // Channel stop "dot" region
-    {
-      Profile = ChannelStopDotProfile;
-      Depth = ChannelStopDotDepth;
-      Charge = ChannelStopDotDoping * MICRON_PER_CM  * ChargeFactor;
+      Profile = ContactProfile;
+      Depth = ContactDepth;
+      Charge = ContactDoping * MICRON_PER_CM  * ChargeFactor;
     }
   else
     {
@@ -3762,30 +2879,16 @@ void MultiGrid::SetCharge(Array3D* rho, Array2DInt* Ckmin, int i, int j, int reg
     {
       for (m=0; m<Profile; m++)
 	{
-	  if (region == 1)  // Channel region  
+	  if (region == 1)  // Contact region  
 	    {
-	      Sigma = ChannelSigma[m];
-	      Peak = ChannelPeak[m];	      
-	      Dose = ChannelDose[m];
-	      Qss = ChannelSurfaceCharge;
-	    }
-	  else if (region == 2)  // Channel stop region
-	    {
-	      Sigma = ChannelStopSigma[m];
-	      Peak = ChannelStopPeak[m];	      
-	      Dose = ChannelStopDose[m];
-	      Qss = ChannelStopSurfaceCharge;
-	    }
-	  else if (region == 3) // Channel stop "dot" region
-	    {
-	      Sigma = ChannelStopDotSigma[m];
-	      Peak = ChannelStopDotPeak[m];	      
-	      Dose = ChannelStopDotDose[m];
-	      Qss = ChannelStopDotSurfaceCharge;
+	      Sigma = ContactSigma[m];
+	      Peak = ContactPeak[m];	      
+	      Dose = ContactDose[m];
+	      Qss = 0.0;//ContactSurfaceCharge;
 	    }
 	  if (VerboseLevel > 2 && i == rho->nx/2 && j == rho->ny/2) Sum = 0.0;
 	  kmax = rho->ZIndex(rho->z[Ckmin->data[index]] + 4.0 * Sigma + Peak);
-	  Charge =  Dose * MICRON_PER_CM  * ChargeFactor * TaperRatio;
+	  Charge =  Dose * MICRON_PER_CM  * ChargeFactor;// * TaperRatio;
 	  Zmin = rho->zmz[Ckmin->data[index]];
 	  Zmax = rho->zpz[kmax];
 	  Total = erf((Zmax - Zmin - Peak) / (sqrt(2.0) * Sigma)) + erf(Peak / (sqrt(2.0) * Sigma));
@@ -3810,113 +2913,5 @@ void MultiGrid::SetCharge(Array3D* rho, Array2DInt* Ckmin, int i, int j, int reg
 	  if (VerboseLevel > 2 && i == rho->nx/2 && j == rho->ny/2) printf("In SetCharge. Nz = %d, m = %d, Total = %f, Sum = %f\n",rho->nz, m, Total, Sum);	      
 	}
     }
-  return;
-}
-
-void MultiGrid::FillElectronWells(Array3D* rho, Array3D* elec, Array2DInt* Ckmin, double ChargeMult)
-{
-  // This fills a pixel with charge from the ColletedCharge array.
-  // It assumes the charge is uniformly distributed in the approximate collection region
-  // ChargeMult allows you to adjust the charge put in.
-  int i, j, k, n, q, index, index2;
-  int CollectedChargeimin, CollectedChargeimax, CollectedChargeXWidth;
-  int CollectedChargejmin, CollectedChargejmax, CollectedChargeYWidth;
-  int CollectedChargekmin, CollectedChargekmax, CollectedChargeZWidth;
-
-  int PixX, PixY, FilledPixX, FilledPixY;
-  double PixXmin, PixYmin, CollectCharge=0.0;
-  double TotalElectrons = 0.0;
-  // First, zero out the electron count.
-  for (n=0; n<NumberofPixelRegions; n++)
-    {
-      for (i=0; i<rho->nx; i++)
-	{
-	  if (rho->x[i] < PixelRegionLowerLeft[n][0] || rho->x[i] > PixelRegionUpperRight[n][0])
-	    {
-	      continue; // If not in PixelRegion, continue
-	    }
-	  for (j=0; j<rho->ny; j++)
-	    {
-	      if (rho->y[j] < PixelRegionLowerLeft[n][1] || rho->y[j] > PixelRegionUpperRight[n][1])
-		{
-		  continue; // If not in PixelRegion, continue
-		}
-	      index = i + j * elec->nx;	      
-	      // Zero out the electrons in the pixel regions
-	      for (k=0; k<elec->nz; k++)
-		{
-		  index2 = index + k * elec->nx * elec->ny;
-		  elec->data[index2] =0.0;
-		}
-	    }
-	}
-    }
-  // Now fill each well with the right amount of charge
-  for (n=0; n<NumberofPixelRegions; n++)
-    {
-      for (q=0; q<NumberofFilledWells[n]; q++)
-	{
-	  if (CollectedCharge[n][q] < 1) continue;
-	  FilledPixX = (int)((FilledPixelCoords[n][q][0] - PixelRegionLowerLeft[n][0]) / PixelSizeX);
-	  FilledPixY = (int)((FilledPixelCoords[n][q][1] - PixelRegionLowerLeft[n][1]) / PixelSizeY);
-	  for (i=0; i<elec->nx; i++)
-	    {
-	      if (elec->x[i] < PixelRegionLowerLeft[n][0] || elec->x[i] > PixelRegionUpperRight[n][0])
-		{
-		  continue; // If not in PixelRegion, continue
-		}
-	      for (j=0; j<elec->ny; j++)
-		{
-		  if (elec->y[j] < PixelRegionLowerLeft[n][1] || elec->y[j] > PixelRegionUpperRight[n][1])
-		    { 
-		      continue; // If not in PixelRegion, continue
-		    }
-		  index = i + j * elec->nx;
-		  PixX = (int)((elec->x[i] - PixelRegionLowerLeft[n][0]) / PixelSizeX);
-		  PixY = (int)((elec->y[j] - PixelRegionLowerLeft[n][1]) / PixelSizeY);
-		  PixXmin = PixelRegionLowerLeft[n][0] + (double)PixX * PixelSizeX;
-		  PixYmin = PixelRegionLowerLeft[n][1] + (double)PixY * PixelSizeY;
-		  // First set the charges
-		  if (!(FilledPixX == PixX && FilledPixY == PixY))
-		    {
-		      continue;
-		    } 
-		  CollectedChargeimin = rho->XIndex(PixXmin + ChannelStopWidth/2.0 + max(FieldOxideTaper, 1.2 * ChannelStopSideDiff));
-		  CollectedChargeimax = rho->XIndex(PixXmin + PixelSizeX - ChannelStopWidth/2.0 - max(FieldOxideTaper, 1.2 * ChannelStopSideDiff));
-		  CollectedChargeXWidth = CollectedChargeimax - CollectedChargeimin + 1;
-		  CollectedChargejmin = rho->YIndex(PixYmin + PixelSizeY * (1.0 - (double)CollectingPhases / (double)NumPhases) / 2.0);
-		  CollectedChargejmax = rho->YIndex(PixYmin + PixelSizeY * (1.0 + (double)CollectingPhases / (double)NumPhases) / 2.0);
-		  CollectedChargeYWidth = CollectedChargejmax - CollectedChargejmin + 1;
-		  CollectedChargekmin = Ckmin->data[index] + 1;
-		  CollectedChargekmax = Ckmin->data[index] + 1;
-		  CollectedChargeZWidth = CollectedChargekmax - CollectedChargekmin + 1;
-		  CollectCharge = (double)CollectedCharge[n][q] * ChargeMult / ((double)CollectedChargeXWidth * (double)CollectedChargeYWidth * (double)CollectedChargeZWidth);
-		  
-		  if (VerboseLevel >2 && ChargeMult > 0.1)
-		    {
-		      printf("In FillElectronWells, n = %d, q = %d, i = %d, j = %d\n",n,q,i,j);
-		      printf("In FillElectronWells, PixX = %d, PixY = %d, FilledPixX = %d, FilledPixY = %d, Charge = %d\n",PixX, PixY, FilledPixX, FilledPixY, CollectedCharge[n][q]);		  
-		      printf("In FillElectronWells, Ckmin = %d, CollectedChargekmin = %d, CollectedChargekmax = %d CollectedChargeZWidth = %d grid cells\n",Ckmin->data[index], CollectedChargekmin, CollectedChargekmax, CollectedChargeZWidth);  
-		      printf("In FillElectronWells, CollectedChargeimin = %d, CollectedChargeimax = %d CollectedChargeXWidth = %d grid cells\n",CollectedChargeimin, CollectedChargeimax, CollectedChargeXWidth);		  
-		      printf("In FillElectronWells, CollectedChargejmin = %d, CollectedChargejmax = %d CollectedChargeYWidth = %d grid cells\n",CollectedChargejmin, CollectedChargejmax, CollectedChargeYWidth);
-		      }
-		  if (i >= CollectedChargeimin && i <= CollectedChargeimax && j >= CollectedChargejmin && j <= CollectedChargejmax)
-		    {
-		      for (k=CollectedChargekmin; k<CollectedChargekmax + 1; k++)
-			{
-			  index2 = index + k * elec->nx * elec->ny;
-			  elec->data[index2] = CollectCharge;
-			  TotalElectrons += CollectCharge;
-			}
-		    }
-		}
-	    }
-	}
-    }
-  if (VerboseLevel > 1 && ChargeMult > 1.0E-6 )
-    {
-      printf("Finished Filling Electron Wells, %.1f total electrons placed.\n", TotalElectrons);
-    }
-      fflush(stdout);
   return;
 }

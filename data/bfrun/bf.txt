@@ -1,2 +1,0 @@
-X Slope = 0.50 % per 50K e-, Intercept = 1.107
-Y Slope = 0.64 % per 50K e-, Intercept = 1.109
