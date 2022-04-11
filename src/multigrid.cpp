@@ -787,6 +787,7 @@ void MultiGrid::SetInitialVoltages(Array3D* phi, Array2DInt* BCType, Array2DInt*
 		{
 		  // In contact region
 		  index2 = index + Vkmin->data[index] * phi->nx * phi->ny;
+		  //phi->data[index] = Vcontact;
 		  phi->data[index2] = Vcontact;
 		  BCType->data[index] = 0;
 		  // The temperature is so low, that QFe is pinned at midgap

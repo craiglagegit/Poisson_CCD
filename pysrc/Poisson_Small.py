@@ -54,7 +54,7 @@ nxmax = int(nxcenter + (NumPixelsPlotted * ScaleFactor * GridsPerPixelX)/2)
 
 nzmin = 0
 nzmax = 16 * ScaleFactor
-"""
+
 print(dat.Elec.sum(), dat.Hole.sum())
 
 print("Center")
@@ -65,8 +65,8 @@ print("Between contacts")
 for k in range(dat.nz):
     print(f"k={k}, z={dat.z[k]}, Rho={dat.rho[nxcenter3,nycenter3,k]}, elec = {dat.Elec[nxcenter,nycenter,k]}, hole = {dat.Hole[nxcenter,nycenter,k]}, Phi={dat.phi[nxcenter3,nycenter3,k]}")
 
-sys.exit()
-"""
+#sys.exit()
+
 
 # Create the output directory if it doesn't exist
 if not os.path.isdir(outputfiledir+"/plots"):
@@ -93,7 +93,7 @@ nxcenter3 = nxcenter2
 plt.plot(dat.z[0:phinumzs],(dat.phi[nxcenter3,nycenter2,0:phinumzs]+dat.phi[nxcenter3-1,nycenter2,0:phinumzs]+dat.phi[nxcenter3,nycenter2-1,0:phinumzs]+dat.phi[nxcenter3-1,nycenter2-1,0:phinumzs])/4.0)
 #plt.legend(loc = "lower left")
 plt.xlabel("Z-Dimension (microns)", fontsize=12)
-plt.ylabel('$\phi(x,y,z)$ [V]',fontsize=12)
+plt.ylabel('$\phi(x,y,z)$ [V]',fontsize=9)
 plt.ylim(-5.0, 0.0)
 plt.xlim(0.0,35.0)
 
@@ -103,8 +103,9 @@ plt.plot(dat.z[0:numzs], (dat.rho[nxcenter2,nycenter2,0:numzs]+dat.rho[nxcenter2
 
 #plt.legend(loc = "upper right")
 plt.xlabel("Z-Dimension (microns)", fontsize=12)
-plt.ylabel('$\\rho(x,y,z)/\epsilon_{Si}$ [V/um$^2$]',fontsize=12)
-#plt.ylim(-80.0, 250.0)
+plt.ylabel('$log10  \\rho(x,y,z)/\epsilon_{Si}$ [V/um$^2$]',fontsize=9)
+plt.yscale('symlog')
+plt.ylim(-10.0, 1.0E4)
 plt.xlim(0.0,35.0)
 nxcenter3 = int(nxcenter2 + GridsPerPixelX * ScaleFactor / 2)
 nycenter3 = nycenter2
@@ -124,8 +125,9 @@ plt.plot(dat.z[0:numzs], ((dat.rho[nxcenter3,nycenter3,0:numzs]+dat.rho[nxcenter
 
 plt.legend(loc = "lower right")
 plt.xlabel("Z-Dimension (microns)", fontsize=12)
-plt.ylabel('$\\rho(x,y,z)/\epsilon_{Si}$ [V/um$^2$]',fontsize=9)
-#plt.ylim(-100.0, 100.0)
+plt.ylabel('$log10  \\rho(x,y,z)/\epsilon_{Si}$ [V/um$^2$]',fontsize=9)
+plt.ylim(-10.0, 1E4)
+plt.yscale('symlog')
 plt.xlim(0.0,35.0)
 plt.savefig(outputfiledir+"/plots/"+outputfilebase+"_1D_Potentials_%d.pdf"%run)
 
