@@ -30,8 +30,8 @@ ScaleFactor = ConfigData["ScaleFactor"]
 GridsPerPixelX = ConfigData["GridsPerPixelX"]
 GridsPerPixelY = ConfigData["GridsPerPixelY"]
 
-ZMult = 2.0
-kmax = int(dat.Elec.shape[2]*0.70)
+ZMult = 1.0
+kmax = int(dat.Elec.shape[2]-1)
 nxx = dat.nx - 1
 nyy = dat.ny - 1
 nzz = dat.nz - 1

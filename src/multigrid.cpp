@@ -861,6 +861,7 @@ void MultiGrid::SetFixedCharges(Array3D* rho, Array2DInt* Ckmin)
 	      if (rho->z[k] > (SensorThickness - TopDopingThickness))
 		{
 		  rho->data[index2] = TopSurfaceDoping * ChargeFactor;
+		  printf("k=%d, z=%.2f, Dop=%f\n",k,rho->z[k], rho->data[index2]);
 		}
 	      else
 		{
@@ -894,17 +895,9 @@ void MultiGrid::SetFixedCharges(Array3D* rho, Array2DInt* Ckmin)
 	      PixYmin = PixelRegionLowerLeft[m][1] + (double)PixY * PixelSizeY;
 	      ContactYmin = PixYmin + (PixelSizeY - ContactHeight) / 2.0;
 	      ContactYmax = ContactYmin + ContactHeight;
-	      if (rho->nx > 34)
-		{
-		  printf("PixX=%d, PixY=%d,PixXmin=%f,PixYmin=%f,ContactXmin=%f,ContactXmax=%f,ContactYmin=%f, ContactYmax=%f\n",PixX,PixY,PixXmin,PixYmin,ContactXmin,ContactXmax,ContactYmin,ContactYmax);
-		}
 	      if (rho->x[i] >= ContactXmin && rho->x[i] <= ContactXmax && rho->y[j] >= ContactYmin && rho->y[j] <= ContactYmax)
 		{
 		  // In contact region
-	      if (rho->nx > 34)
-		{
-		  printf("i=%d,j=%d,rho->x[i]=%f, rho->y[j]=%f\n",i,j,rho->x[i],rho->y[j]);
-		}
 		  SetCharge(rho, Ckmin, i, j, 1);		  
 		}
 	    }
@@ -968,7 +961,8 @@ double MultiGrid::SOR_Inner(Array3D* phi, Array3D* rho, Array3D* elec, Array3D* 
   double logSORChargeFactor =  log(SORChargeFactor);
   double MinElec = 1.0E-6; // electron concentrations are not adjusted below this value
   double MinDeltaPhi = ktq * log(MinElec) - logNi - logSORChargeFactor; // This controls where we calculate mobile carriers
-  MinDeltaPhi = 0.001;
+  printf("MinDeltaPhi=%f\n",MinDeltaPhi);
+  MinDeltaPhi = 0.1;
   double MaxExponent = 10.0;
   printf("MinDeltaPhi=%f\n",MinDeltaPhi);
   double DeltaPhi, MaxDeltaPhi = 0.1;   // This limits the change in phi per cycle and helps convergence.
