@@ -53,15 +53,15 @@ MultiGrid::MultiGrid(string inname) //Constructor
       SaveGridMulti();  
     }
   printf("Finished Building Arrays. \n");
-  //CountCharges(rho, elec, hole);  
+  CountCharges(rho, elec, hole);  
   Setkmins(rho, Ckmin, Vkmin);
   for (n=0; n<nsteps+1; n++)
     {
-      SetInitialVoltages(phi[n], BCType[n], Vkmin[n]);
+      SetInitialVoltages(phi[n], BCType[n], Vkmin[n], QFe[n]);
       SetFixedCharges(rho[n], Ckmin[n]); // Place fixed charges
     }
   Set_QFh(QFh); // Set hole Quasi-Fermi level
-  Set_QFe(QFe); // Set electron Quasi-Fermi level  
+  //Set_QFe(QFe); // Set electron Quasi-Fermi level  
 
   time2 = time(NULL);
   setup_time = difftime(time2, time1);
@@ -393,7 +393,7 @@ void MultiGrid::ReadConfigurationFile(string inname)
   iterations =  GetIntParam(inname, "iterations", 1, VerboseLevel);	// Number of VCycles
   Seed =  GetIntParam(inname, "Seed", 77, VerboseLevel);	// Seed
   NZExp = GetDoubleParam(inname, "NZExp", 10.0, VerboseLevel);        // Non-linear z axis exponent
-  ElectronMethod = 2;
+  ElectronMethod = 1;
   // Overall setup
   NumSteps = GetIntParam(inname, "NumSteps", 100, VerboseLevel);
   SaveData =  GetIntParam(inname, "SaveData", 1, VerboseLevel);     // 0 - Save only Pts, N save phi,rho,E every Nth step
@@ -430,6 +430,8 @@ void MultiGrid::ReadConfigurationFile(string inname)
   BackgroundDoping = GetDoubleParam(inname, "BackgroundDoping", -1.0E12, VerboseLevel);
   TopSurfaceDoping = GetDoubleParam(inname, "TopSurfaceDoping", -1.0E12, VerboseLevel);
   TopDopingThickness = GetDoubleParam(inname, "TopDopingThickness", 0.0, VerboseLevel);
+  ContactWidth = GetDoubleParam(inname, "ContactWidth", 10.0, VerboseLevel);
+  ContactHeight = GetDoubleParam(inname, "ContactHeight", 10.0, VerboseLevel);    
 
   string profilenum, regionnum;
   ContactProfile = GetIntParam(inname, "ContactProfile", 0, VerboseLevel);
@@ -458,9 +460,11 @@ void MultiGrid::ReadConfigurationFile(string inname)
 
   // Temperature and diffusion parameters 
   CCDTemperature = GetDoubleParam(inname, "CCDTemperature", 173.0, VerboseLevel);
-  Ni = NS * pow(CCDTemperature / 300.0, 1.5) * exp( - QE * EG / (2.0 * KBOLTZMANN * CCDTemperature)) / pow(MICRON_PER_CM, 3.0);   // Intrinsic carrier concentration per micron^3
+  logNi = log(NS) + 1.5 * log(CCDTemperature / 300.0) + ( - QE * EG / (2.0 * KBOLTZMANN * CCDTemperature)) - log(pow(MICRON_PER_CM, 3.0));   // log of intrinsic carrier concentration per micron^3
   ktq = .026 * CCDTemperature / 300.0;//KBOLTZMANN * CCDTemperature / QE;
-  printf("Intrinsic carrier concentration Ni = %g in code units, kT/q = %f Volts\n",Ni,ktq);
+  printf("log of intrinsic carrier concentration logNi = %g in code units, kT/q = %f Volts\n",logNi,ktq);
+  printf("Delta QFe = %f\n", (ktq * (log(ContactDoping / pow(MICRON_PER_CM, 3)) - logNi)));  
+  printf("Delta QFh = %f\n", (ktq * (log(-TopSurfaceDoping / pow(MICRON_PER_CM, 3)) - logNi)));
   DiffMultiplier = GetDoubleParam(inname, "DiffMultiplier", 2.30, VerboseLevel);
   TopAbsorptionProb = GetDoubleParam(inname, "TopAbsorptionProb", 0.0, VerboseLevel);
   SaturationModel = GetIntParam(inname, "SaturationModel", 0, VerboseLevel);
@@ -728,13 +732,14 @@ void MultiGrid::BuildArrays(Array3D** phi, Array3D** rho, Array3D** elec, Array3
   return;
 }
 
-void MultiGrid::SetInitialVoltages(Array3D* phi, Array2DInt* BCType, Array2DInt* Vkmin)
+void MultiGrid::SetInitialVoltages(Array3D* phi, Array2DInt* BCType, Array2DInt* Vkmin, Array2D* QFe)
 {
   // This sets up the initial voltages on the boundaries
-  int i, j, m, index, index2;
+  // It also sets up QFe
+  int i, j, n, m, index, index2;
   int PixX, PixY;
-  double PixXmin, PixYmin, ContactXmin, ContactXmax, ContactYmin, ContactYmax;
-  
+  double PixXmin, PixYmin, PixXmax, PixYmax, DeltaQFe;
+  double ContactXmin, ContactXmax, ContactYmin, ContactYmax, ContactVoltage;
   for (i=0; i<phi->nx; i++)
     {
       for (j=0; j<phi->ny; j++)
@@ -754,6 +759,7 @@ void MultiGrid::SetInitialVoltages(Array3D* phi, Array2DInt* BCType, Array2DInt*
 	    }
 	  PixX = (int)floor((phi->x[i] - PixelRegionLowerLeft[m][0]) / PixelSizeX);
 	  PixXmin = PixelRegionLowerLeft[m][0] + (double)PixX * PixelSizeX;
+	  PixXmax = PixXmin + PixelSizeX;
 	  ContactXmin = PixXmin + (PixelSizeX - ContactWidth) / 2.0;
 	  ContactXmax = ContactXmin + ContactWidth;
 	  for (j=0; j<phi->ny; j++)
@@ -765,6 +771,16 @@ void MultiGrid::SetInitialVoltages(Array3D* phi, Array2DInt* BCType, Array2DInt*
 	      index = i + j * phi->nx;
 	      PixY = (int)floor((phi->y[j] - PixelRegionLowerLeft[m][1]) / PixelSizeY);
 	      PixYmin = PixelRegionLowerLeft[m][1] + (double)PixY * PixelSizeY;
+	      PixYmax = PixYmin + PixelSizeY;
+	      ContactVoltage = Vcontact;
+	      // Bring in Delta Vs
+	      for (n=0; n<NumberofContactDeltaVs[m]; n++)
+		{
+		  if (DeltaVPixelCoords[m][n][0] >PixXmin && DeltaVPixelCoords[m][n][0] <PixXmax && DeltaVPixelCoords[m][n][1] >PixYmin && DeltaVPixelCoords[m][n][1] >PixYmax)
+		    {
+		      ContactVoltage += DeltaV[m][n];
+		    }
+		}
 	      ContactYmin = PixYmin + (PixelSizeY - ContactHeight) / 2.0;
 	      ContactYmax = ContactYmin + ContactHeight;
 	      if (phi->x[i] >= ContactXmin && phi->x[i] <= ContactXmax && phi->y[j] >= ContactYmin && phi->y[j] <= ContactYmax)
@@ -773,11 +789,16 @@ void MultiGrid::SetInitialVoltages(Array3D* phi, Array2DInt* BCType, Array2DInt*
 		  index2 = index + Vkmin->data[index] * phi->nx * phi->ny;
 		  phi->data[index2] = Vcontact;
 		  BCType->data[index] = 0;
+		  // The temperature is so low, that QFe is pinned at midgap
+
+		  DeltaQFe = ktq * (log(ContactDoping / pow(MICRON_PER_CM, 3)) - logNi);  
+		  QFe->data[index] = ContactVoltage - DeltaQFe;
 		}
 	      else
 		{
 		  // Between contacts
-		  BCType->data[index] = 1;		  
+		  BCType->data[index] = 1;
+		  QFe->data[index] = ContactVoltage;		  
 		}
 	    }
 	}
@@ -873,9 +894,17 @@ void MultiGrid::SetFixedCharges(Array3D* rho, Array2DInt* Ckmin)
 	      PixYmin = PixelRegionLowerLeft[m][1] + (double)PixY * PixelSizeY;
 	      ContactYmin = PixYmin + (PixelSizeY - ContactHeight) / 2.0;
 	      ContactYmax = ContactYmin + ContactHeight;
+	      if (rho->nx > 34)
+		{
+		  printf("PixX=%d, PixY=%d,PixXmin=%f,PixYmin=%f,ContactXmin=%f,ContactXmax=%f,ContactYmin=%f, ContactYmax=%f\n",PixX,PixY,PixXmin,PixYmin,ContactXmin,ContactXmax,ContactYmin,ContactYmax);
+		}
 	      if (rho->x[i] >= ContactXmin && rho->x[i] <= ContactXmax && rho->y[j] >= ContactYmin && rho->y[j] <= ContactYmax)
 		{
 		  // In contact region
+	      if (rho->nx > 34)
+		{
+		  printf("i=%d,j=%d,rho->x[i]=%f, rho->y[j]=%f\n",i,j,rho->x[i],rho->y[j]);
+		}
 		  SetCharge(rho, Ckmin, i, j, 1);		  
 		}
 	    }
@@ -934,15 +963,15 @@ double MultiGrid::SOR_Inner(Array3D* phi, Array3D* rho, Array3D* elec, Array3D* 
   // An inner Newton's method loop is used to solve the non-linear Quasi-Fermi level equations.
   // Assumes fixed potentials on the top, mixture of fixed and free BC on bottom, free or periodic BC on the sides.
   double newphi, oldnewphi, tol, exponent = 0.0;
-  double omw, w6, hsquared, zhsquaredp, zhsquaredm;
-  double SORChargeFactor =  (QE*MICRON_PER_M/(EPSILON_0*EPSILON_SI));
-  double MaxExponent = log(1.0E10 / (Ni * SORChargeFactor)); // This limits mobile carrier density from getting too large
+  double omw, w6, hsquared;
+  double SORChargeFactor =  QE*MICRON_PER_M/(EPSILON_0*EPSILON_SI);
+  double logSORChargeFactor =  log(SORChargeFactor);
   double MinElec = 1.0E-6; // electron concentrations are not adjusted below this value
-  double MinDeltaPhi = ktq * log(MinElec / (Ni * SORChargeFactor)); // This controls where we calculate mobile carriers
+  double MinDeltaPhi = ktq * log(MinElec) - logNi - logSORChargeFactor; // This controls where we calculate mobile carriers
+  MinDeltaPhi = 0.001;
+  double MaxExponent = 10.0;
+  printf("MinDeltaPhi=%f\n",MinDeltaPhi);
   double DeltaPhi, MaxDeltaPhi = 0.1;   // This limits the change in phi per cycle and helps convergence.
-  double Emax = 100.0; // This controls how quickly the electron concentrations are adjusted.
-  double PreFactor = phi->dx / Emax;  
-  double nmx, npx, nmy, npy, nmz, npz, dnmx, dnpx, dnmy, dnpy, dnmz, dnpz, deltan;
   bool InnerLoop;
   double ElecCharge=0.0, HoleCharge=0.0, Term1=0.0, Term2=0.0, CellVolume=0.0, AveIterations = 0.0;
   double NumElec=0.0, NumHoles=0.0, TotalHoles=0.0, TotalElectrons=0.0;
@@ -1002,93 +1031,13 @@ double MultiGrid::SOR_Inner(Array3D* phi, Array3D* rho, Array3D* elec, Array3D* 
 		      w6 = w / (4.0 + phi->zplus[k] + phi->zminus[k]);
 		      CellVolume = rho->dx * rho->dy * rho->zw[k];
 		      Term1 = omw * phi->data[ind] + w6 * (phi->data[indmx] + phi->data[indpx] + phi->data[indmy] + phi->data[indpy] + phi->zminus[k] * phi->data[indmz] + phi->zplus[k] * phi->data[indpz] + hsquared * rho->data[ind]);
-		      newphi = phi->data[ind];
-		      if (k>=Ckmin->data[ind2] && QFe->data[ind2] > 1.0E5 && elec->data[ind] > MinElec)
+		      if (isnan(Term1))
 			{
-			  // Inner Newton loop for electrons when using ElectronMethod == 2
-			  // Move electrons to drive QFe toward a constant value
-			  // This conserves electrons.
-			  // These two terms are needed to compensate for non-linear z-axis
-			  zhsquaredp = 4.0 * phi->dzp / (phi->dzpdz[k] + phi->dzpdz[k+1]) * phi->dzp / (phi->dzpdz[k] + phi->dzpdz[k+1]);
-			  zhsquaredm = 4.0 * phi->dzp / (phi->dzpdz[k] + phi->dzpdz[k-1]) * phi->dzp / (phi->dzpdz[k] + phi->dzpdz[k-1]);
-			  InnerLoop = true;
-			  mm++;
-			  // n** is the value at the cell boundary
-			  // dn** is the number of electrons to be moved across the boundary
-			  nmx = (elec->data[ind] + elec->data[indmx]) / 2.0;
-			  dnmx = max(-elec->data[indmx], PreFactor / hsquared * (ktq * (elec->data[ind] - elec->data[indmx]) - nmx * (phi->data[ind] - phi->data[indmx])));
-			  if (fabs(dnmx) < MinElec) dnmx = 0.0;
-			  npx = (elec->data[ind] + elec->data[indpx]) / 2.0;
-			  dnpx = max(-elec->data[indpx], PreFactor / hsquared * (ktq * (elec->data[ind] - elec->data[indpx]) - npx * (phi->data[ind] - phi->data[indpx])));
-			  if (fabs(dnpx) < MinElec) dnpx = 0.0;
-			  nmy = (elec->data[ind] + elec->data[indmy]) / 2.0;
-			  dnmy = max(-elec->data[indmy], PreFactor / hsquared * (ktq * (elec->data[ind] - elec->data[indmy]) - nmy * (phi->data[ind] - phi->data[indmy])));
-			  if (fabs(dnmy) < MinElec) dnmy = 0.0;
-			  npy = (elec->data[ind] + elec->data[indpy]) / 2.0;
-			  dnpy = max(-elec->data[indpy], PreFactor / hsquared * (ktq * (elec->data[ind] - elec->data[indpy]) - npy * (phi->data[ind] - phi->data[indpy])));
-			  if (fabs(dnpy) < MinElec) dnpy = 0.0;
-			  if (k > Ckmin->data[ind2])
-			    {
-			      // Don't move electrons below Ckmin
-			      nmz = (elec->data[ind] + elec->data[indmz]) / 2.0;
-			      dnmz = max(-elec->data[indmz], PreFactor / zhsquaredm * (ktq * (elec->data[ind] - elec->data[indmz]) - nmz * (phi->data[ind] - phi->data[indmz])));
-			      if (fabs(dnmz) < MinElec) dnmz = 0.0;
-			    }
-			  else
-			    {
-			      dnmz = 0.0;
-			    }
-			  if (k < elec->nz)
-			    {
-			      // Don't move electrons above elec->nz-1
-			      npz = (elec->data[ind] + elec->data[indpz]) / 2.0;
-			      dnpz = max(-elec->data[indpz], PreFactor / zhsquaredp * (ktq * (elec->data[ind] - elec->data[indpz]) - npz * (phi->data[ind] - phi->data[indpz])));
-			      if (fabs(dnpz) < MinElec) dnpz = 0.0;
-			    }
-			  else
-			    {
-			      dnpz = 0.0;
-			    }
-			  deltan = (dnmx + dnpx + dnmy + dnpy + dnmz + dnpz);
-			  
-			    if (VerboseLevel > 2 && i == 20 && j == 20)
-			    {
-			    printf("In SOR_Inner, ElectronMethod=2. i = %d, j = %d, k = %d, kmax = %d, deltan = %f\n",i,j,k,elec->nz-1,deltan);
-			    printf("In SOR_Inner, ElectronMethod=2. dnmx=%f,dnpx=%f,dnmy=%f,dnpy=%f,dnmz=%f,dnpz=%f\n",dnmx,dnpx,dnmy,dnpy,dnmz,dnpz);
-			    }
-			  if (deltan > elec->data[ind])
-			    {
-			      // Don't allow the cell to go negative
-			      // If it would, ratio down the values until the cell is zero.
-			      dnmx *= elec->data[ind] / deltan;
-			      dnpx *= elec->data[ind] / deltan;
-			      dnmy *= elec->data[ind] / deltan;
-			      dnpy *= elec->data[ind] / deltan;
-			      dnmz *= elec->data[ind] / deltan;
-			      dnpz *= elec->data[ind] / deltan;
-			      deltan = (dnmx + dnpx + dnmy + dnpy + dnmz + dnpz);
-			    }
-			  elec->data[ind] -= deltan;
-			  // Now update the surrounding cells
-			  elec->data[indmx] += dnmx;
-			  elec->data[indpx] += dnpx;
-			  elec->data[indmy] += dnmy;
-			  elec->data[indpy] += dnpy;
-			  elec->data[indmz] += dnmz;
-			  elec->data[indpz] += dnpz;		      
-			  TotalElectrons += fabs(deltan);
-			  // Now calculate the new phi.
-			  ElecCharge = - elec->data[ind] * SORChargeFactor / CellVolume;
-			  newphi = Term1 + w6 * hsquared * ElecCharge;
-			  DeltaPhi = max(-MaxDeltaPhi, min(MaxDeltaPhi, newphi - phi->data[ind]));		  
-			  newphi = phi->data[ind] + DeltaPhi;
-			  if (isnan(newphi) || isnan(elec->data[ind]))
-			    {
-			      printf("Nan encountered in SOR_Inner electrons at point i,j,k = (%d,%d,%d)\n",i,j,k);
-			      printf("Phi = %f, NumElec = %f, ElecCharge = %f, exponent = %f, Term1 = %f, Term2 = %f\n",phi->data[ind], NumElec, ElecCharge, exponent, Term1, Term2);
-			      exit(0);
-			    }
+			  printf("omw=%f, w6=%f, phi->data[ind]=%f,phi->zminus[k]=%f, rho->data[ind]=%f\n",omw,w6,phi->data[ind],phi->zminus[k],rho->data[ind]);
+			  printf("phi->data[indmx]=%f,phi->data[indmy]=%f,phi->data[indmz]=%f,phi->data[indpx]=%f,phi->data[indpy]=%f,phi->data[indpz]=%f\n",phi->data[indmx],phi->data[indmy],phi->data[indmz],phi->data[indpx],phi->data[indpy],phi->data[indpz]);
+			  exit(0);
 			}
+		      newphi = phi->data[ind];
 		      if (k>=Ckmin->data[ind2] && phi->data[ind]>QFe->data[ind2]+MinDeltaPhi)
 			{
 			  // Inner Newton loop for electrons in Fixed Regions
@@ -1100,8 +1049,9 @@ double MultiGrid::SOR_Inner(Array3D* phi, Array3D* rho, Array3D* elec, Array3D* 
 			  while (tol > 1.0E-9 && iter_counter < iter_limit)
 			    {
 			      oldnewphi = newphi;
-			      exponent = min(MaxExponent, (newphi - QFe->data[ind2]) / ktq);// Prevents ElecCharge getting too large
-			      ElecCharge = - Ni * exp(exponent) * SORChargeFactor;
+			      exponent = logNi + (newphi - QFe->data[ind2]) / ktq + logSORChargeFactor;
+			      exponent = min(MaxExponent, exponent);// Prevents ElecCharge getting too large
+			      ElecCharge = - exp(exponent);
 			      Term2 = hsquared * w6 * ElecCharge / ktq;
 			      if (fabs(1.0 - Term2) < 1.0E-18) break; 
 			      newphi = newphi - (newphi - (w6 * hsquared * ElecCharge + Term1)) / (1.0 - Term2);
@@ -1147,8 +1097,9 @@ double MultiGrid::SOR_Inner(Array3D* phi, Array3D* rho, Array3D* elec, Array3D* 
 			  while (tol > 1.0E-9 && iter_counter < iter_limit)
 			    {
 			      oldnewphi = newphi;
-			      exponent = min(MaxExponent,(QFh->data[ind2] - newphi) / ktq);// Prevents HoleCharge getting too large
-			      HoleCharge = Ni * exp(exponent) * SORChargeFactor;
+			      exponent = logNi + (QFh->data[ind2] - newphi) / ktq + logSORChargeFactor;
+			      exponent = min(MaxExponent, exponent);// Prevents ElecCharge getting too large
+			      HoleCharge = 0.0;//exp(exponent);
 			      Term2 = hsquared * w6 * HoleCharge / ktq;
 			      if (fabs(1.0 + Term2) < 1.0E-18) break;
 			      newphi = newphi - (newphi - (w6 * hsquared * HoleCharge + Term1)) / (1.0 + Term2);	  
@@ -1405,7 +1356,7 @@ void MultiGrid::VCycle_Inner(Array3D** phi, Array3D** rho, Array3D** elec, Array
 	  WriteOutputFile(outputfiledir, outputfilebase+"_Multi_"+istepnum+"_"+StepNum, "phi", phi[i]);
 	  WriteOutputFile(outputfiledir, outputfilebase+"_Multi_"+istepnum+"_"+StepNum, "rho", rho[i]);
 	  WriteOutputFile(outputfiledir, outputfilebase+"_Multi_"+istepnum+"_"+StepNum, "Elec", elec[i]);
-	  WriteOutputFile(outputfiledir, outputfilebase+"_Multi_"+istepnum+"_"+StepNum, "Hole", elec[i]);
+	  WriteOutputFile(outputfiledir, outputfilebase+"_Multi_"+istepnum+"_"+StepNum, "Hole", hole[i]);
 	  if (VerboseLevel > 2)
 	    {
 	      Write2DFile(outputfiledir, outputfilebase+"_Multi_"+istepnum+"_"+StepNum, "QFe", QFe[i]);
@@ -2591,6 +2542,7 @@ void MultiGrid::Set_QFh(Array2D** QFh)
 {
   //Set hole quasi-Fermi level in the region.
   int i, j, n, index;
+  double DeltaQFh;
   for (n=0; n<nsteps+1; n++)
     {
       for (i=0; i<QFh[n]->nx; i++)
@@ -2598,7 +2550,10 @@ void MultiGrid::Set_QFh(Array2D** QFh)
 	  for (j=0; j<QFh[n]->ny; j++)
 	    {
 	      index = i + j * QFh[n]->nx;
-	      QFh[n]->data[index] = qfh;
+	      // The temperature is so low, that QFh is pinned at midgap
+	      DeltaQFh = ktq * (log(TopSurfaceDoping / pow(MICRON_PER_CM, 3)) - logNi);  
+	      QFh[n]->data[index] = Vbb + DeltaQFh;
+	      //QFh[n]->data[index] = qfh;
 	    }
 	}
     }
@@ -2628,6 +2583,7 @@ void MultiGrid::Set_QFh(Array2D** QFh)
   return;
 }
 
+/*
 void MultiGrid::Set_QFe(Array2D** QFe)
 {
   //Set hole quasi-Fermi level in the region.
@@ -2645,7 +2601,7 @@ void MultiGrid::Set_QFe(Array2D** QFe)
     }
   // Set QFe in the Fixed Voltage regions
   // Commented out for now
-  /*
+  
   // Set QFe in the Fixed Voltage regions
   for (m=0; m<NumberofFixedRegions; m++)
     {
@@ -2662,11 +2618,11 @@ void MultiGrid::Set_QFe(Array2D** QFe)
 	    }
 	}
     }
-  */
+  
   fflush(stdout);
   return;
   }
-
+*/
 
 
 
@@ -2708,13 +2664,13 @@ void MultiGrid::Setkmins(Array3D** rho, Array2DInt** Ckmin, Array2DInt** Vkmin)
 		    {
 		      // In contact region
 		      Ckmin[n]->data[index] = 0;
-		      Vkmin[n]->data[index] = 0;
+		      Vkmin[n]->data[index] = 1;
 		    }
 		  else
 		    {
 		      // Between contacts
-		      Ckmin[n]->data[index] = BottomOxide;
-		      Vkmin[n]->data[index] = 0.0;
+		      Ckmin[n]->data[index] = rho[n]->ZIndex(BottomOxide);
+		      Vkmin[n]->data[index] = 1;
 		    }
 		}
 	    }

@@ -17,13 +17,15 @@ from pysubs import *  # These are the plotting subroutines
 
 configfile = sys.argv[1]
 run = int(sys.argv[2])
+multi = int(sys.argv[3])
+
 ConfigData = ReadConfigFile(configfile)
 
 outputfilebase = ConfigData["outputfilebase"]
 outputfiledir = ConfigData["outputfiledir"]
 
 # This holds all of the data
-dat = Array3dHDF5(outputfiledir, outputfilebase, run)
+dat = Array3dHDF5(outputfiledir, outputfilebase, run, multi=multi)
 
 ScaleFactor = ConfigData["ScaleFactor"]
 GridsPerPixelX = ConfigData["GridsPerPixelX"]
@@ -38,9 +40,12 @@ nzz = dat.nz - 1
 nxcenter = int(nxx/2)
 nycenter = int(nyy/2)
 nxcenter2 = nxcenter
+nxcenter3 = int(nxcenter2 + GridsPerPixelX * ScaleFactor / 2 / 2**(multi))
 
 NumPixelsPlotted = 1
 nycenter2 = nycenter
+nycenter3 = int(nycenter2 + GridsPerPixelY * ScaleFactor / 2/ 2**(multi))
+
 nymin = int(nycenter - (NumPixelsPlotted * ScaleFactor * GridsPerPixelY)/2)
 nymax = int(nycenter + (NumPixelsPlotted * ScaleFactor * GridsPerPixelY)/2)
 
@@ -49,6 +54,19 @@ nxmax = int(nxcenter + (NumPixelsPlotted * ScaleFactor * GridsPerPixelX)/2)
 
 nzmin = 0
 nzmax = 16 * ScaleFactor
+
+print(dat.Elec.sum(), dat.Hole.sum())
+
+print("Center")
+for k in range(dat.nz):
+    print(f"k={k}, z={dat.z[k]}, Rho={dat.rho[nxcenter,nycenter,k]}, elec = {dat.Elec[nxcenter,nycenter,k]}, hole = {dat.Hole[nxcenter,nycenter,k]}, Phi={dat.phi[nxcenter,nycenter,k]}")
+
+print("Between contacts")
+for k in range(dat.nz):
+    print(f"k={k}, z={dat.z[k]}, Rho={dat.rho[nxcenter3,nycenter3,k]}, elec = {dat.Elec[nxcenter,nycenter,k]}, hole = {dat.Hole[nxcenter,nycenter,k]}, Phi={dat.phi[nxcenter3,nycenter3,k]}")
+
+sys.exit()
+
 
 # Create the output directory if it doesn't exist
 if not os.path.isdir(outputfiledir+"/plots"):

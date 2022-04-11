@@ -23,8 +23,6 @@ NumPixelsPlotted = int(sys.argv[3])
 ConfigData = ReadConfigFile(configfile)
 outputfilebase = ConfigData["outputfilebase"]
 outputfiledir = ConfigData["outputfiledir"]
-Vpl = ConfigData["Vparallel_lo"]
-Vph = ConfigData["Vparallel_hi"]
 # This holds all of the data
 dat = Array3dHDF5(outputfiledir, outputfilebase, run)
 
@@ -72,14 +70,14 @@ for i, plotdata in enumerate(plotdatas):
     ax1.set_title("X-Y Slice")
     ax1.set_xticks([])
     ax1.set_yticks([])
-    [plotarray, dxx, dyy, levels, my_cmap] = BuildPlotArray(dat, plotdata, 2, nxmin, nxmax, nymin, nymax, 0, kmax, ZMult, ForceZeros[i], Vph, Vpl, cmaps[i])
+    [plotarray, dxx, dyy, levels, my_cmap] = BuildPlotArray(dat, plotdata, 2, nxmin, nxmax, nymin, nymax, 0, kmax, ZMult, ForceZeros[i], cmaps[i])
     ax1.contourf(dxx, dyy, plotarray, levels = levels, cmap = my_cmap, extend='both')
 
     ax2=plt.axes([0.10,0.20,0.50,0.20], aspect=1)
     ax2.set_title("X-Z Slice")
     ax2.set_xticks([])
     ax2.set_yticks([0.0,2.0,4.0])
-    [plotarray, dxx, dyy, levels, my_cmap] = BuildPlotArray(dat, plotdata, 1, nxmin, nxmax, 0, kmax, nymin, nymax, ZMult, ForceZeros[i], Vph, Vpl, cmaps[i])
+    [plotarray, dxx, dyy, levels, my_cmap] = BuildPlotArray(dat, plotdata, 1, nxmin, nxmax, 0, kmax, nymin, nymax, ZMult, ForceZeros[i], cmaps[i])
     ax2.contourf(dxx, dyy, plotarray, levels = levels, cmap = my_cmap, extend='both')
 
     ax3=plt.axes([0.10,0.10,0.50,0.10])
@@ -94,7 +92,7 @@ for i, plotdata in enumerate(plotdatas):
     ax4.set_title("Y-Z Slice")
     ax4.set_xticks([0.0,2.0,4.0])
     ax4.set_yticks([])
-    [plotarray, dxx, dyy, levels, my_cmap] = BuildPlotArray(dat, plotdata, 0, 0, kmax, nymin, nymax, xslicemins[i], xslicemaxs[i], ZMult, ForceZeros[i], Vph, Vpl, cmaps[i])
+    [plotarray, dxx, dyy, levels, my_cmap] = BuildPlotArray(dat, plotdata, 0, 0, kmax, nymin, nymax, xslicemins[i], xslicemaxs[i], ZMult, ForceZeros[i], cmaps[i])
     ax4.contourf(dxx, dyy, plotarray, levels = levels, cmap = my_cmap, extend='both')        
     ax4.invert_xaxis()
 

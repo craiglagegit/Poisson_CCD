@@ -99,7 +99,7 @@ def ReadConfigFile(filename):
     return config
 
 
-def BuildPlotArray(dat, plotdata, axis, nxmin, nxmax, nymin, nymax, nzmin, nzmax, ZMult, ForceZero, Vph, Vpl, cmap):
+def BuildPlotArray(dat, plotdata, axis, nxmin, nxmax, nymin, nymax, nzmin, nzmax, ZMult, ForceZero, cmap):
     # This builds a 2D array for use with the charge plotting
     plotarray = np.zeros([nxmax-nxmin+1,nymax-nymin+1])
     dxx = np.zeros([nxmax-nxmin+1])
@@ -146,13 +146,9 @@ def BuildPlotArray(dat, plotdata, axis, nxmin, nxmax, nymin, nymax, nzmin, nzmax
             if axis == 0:
                 if abs(dat.rho[int((nzmin+nzmax)/2),nymin+j,nxmin+i]) < 1.0E-12:
                     plotarray[i,j] = vmax+1.0E6
-                if abs(Vph - dat.phi[int((nzmin+nzmax)/2),nymin+j,nxmin+i]) < 1.0E-12 or abs(Vpl - dat.phi[int((nzmin+nzmax)/2),nymin+j,nxmin+i]) < 1.0E-12:
-                    plotarray[i,j] = vmin-1.0E6
             elif axis == 1:
                 if abs(dat.rho[nxmin+i, int((nzmin+nzmax)/2),nymin+j]) < 1.0E-12:
                     plotarray[i,j] = vmax+100000.0
-                if abs(Vph - dat.phi[nxmin+i,int((nzmin+nzmax)/2),nymin+j]) < 1.0E-12 or abs(Vpl - dat.phi[nxmin+i,int((nzmin+nzmax)/2),nymin+j]) < 1.0E-12:
-                    plotarray[i,j] = vmin-1.0E6
     if axis == 0:
         for j in range(nymax-nymin+1):
             plotarray[1,j] =  vmin-1.0E6

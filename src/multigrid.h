@@ -86,7 +86,7 @@ class MultiGrid
   double qfe;           // Quasi-Fermi level for electrons
   double qfh;           // Quasi-Fermi level for holes
   double Vbb;           // Backside voltage
-  double Ni;            // Intrinsic carrier concentration at operating temperature
+  double logNi;            // Intrinsic carrier concentration at operating temperature
   double ktq;           // kT/q
   double Vcontact;    // Nominal voltage at contact
 
@@ -191,7 +191,7 @@ class MultiGrid
   void BuildArrays(Array3D**, Array3D**, Array3D**, Array3D**, Array3D**, Array2DInt**, Array2D**, Array2D**, Array2DInt**, Array2DInt**);
   void SaveGrid();
   void SaveGridMulti();  
-  void SetInitialVoltages(Array3D*, Array2DInt*, Array2DInt*);
+  void SetInitialVoltages(Array3D*, Array2DInt*, Array2DInt*, Array2D*);
   void SetFixedCharges(Array3D*, Array2DInt*);
   double SOR_Inner(Array3D*, Array3D*, Array3D*, Array3D*, Array2DInt*, Array2D*, Array2D*, Array2DInt*, Array2DInt*);
   double Error_Inner(Array3D*, Array3D*, Array3D*, Array3D*, Array2DInt*, Array2DInt*);
@@ -212,7 +212,7 @@ class MultiGrid
   void CalculatePixelAreas(int);
   double mu_Si (double, double);
   void Set_QFh(Array2D**);
-  void Set_QFe(Array2D**);
+  //void Set_QFe(Array2D**);
   void WriteCollectedCharge(string, string, string);  
   void ReadQFeLookup(string, string, string);
   void Setkmins(Array3D**, Array2DInt**, Array2DInt**);
