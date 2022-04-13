@@ -192,10 +192,10 @@ class MultiGrid
   void SaveGrid();
   void SaveGridMulti();  
   void SetInitialVoltages(Array3D*, Array2DInt*, Array2DInt*, Array2D*);
-  void SetFixedCharges(Array3D*, Array2DInt*);
+  void SetFixedAndMobileCharges(Array3D*, Array3D*, Array3D*, Array2DInt*);
   double SOR_Inner(Array3D*, Array3D*, Array3D*, Array3D*, Array2DInt*, Array2D*, Array2D*, Array2DInt*, Array2DInt*);
   double Error_Inner(Array3D*, Array3D*, Array3D*, Array3D*, Array2DInt*, Array2DInt*);
-  void Prolongate(Array3D*, Array3D*, Array3D*, Array3D*, Array2DInt*, Array2DInt*, Array2DInt*);
+  void Prolongate(Array3D*, Array3D*, Array3D*, Array3D*, Array3D*, Array3D*, Array2DInt*, Array2DInt*, Array2DInt*);
   void VCycle_Inner(Array3D**, Array3D**, Array3D**, Array3D**, Array2DInt**, Array2D**, Array2D**, Array2DInt**, Array2DInt**, int, int);
   void WriteOutputFile(string, string, string, Array3D*);
   void ReadOutputFile(string, string, string, Array3D*);
@@ -220,5 +220,5 @@ class MultiGrid
   void Write3DFile(string, string, string, Array3D*);
   void Write2DFile(string, string, string, Array2D*);
   void Write2DIntFile(string, string, string, Array2DInt*);
-  void SetCharge(Array3D*, Array2DInt*, int, int, int);
+  void SetCharge(Array3D*, Array3D*, Array3D*, Array2DInt*, int, int, int);
 };
