@@ -56,7 +56,7 @@ MultiGrid::MultiGrid(string inname) //Constructor
   Setkmins(rho, Ckmin, Vkmin);
   for (n=0; n<nsteps+1; n++)
     {
-      SetInitialVoltages(phi[n], BCType[n], Vkmin[n], QFe[n]);
+      SetInitialVoltages(phi[n], BCType[n], QFe[n]);
       SetFixedAndMobileCharges(rho[n], hole[n], elec[n], Ckmin[n]); // Place fixed charges
     }
   Set_QFh(QFh); // Set hole Quasi-Fermi level
@@ -382,7 +382,7 @@ void MultiGrid::ReadConfigurationFile(string inname)
   outputfiledir  = GetStringParam(inname,"outputfiledir", "data", VerboseLevel); //Output filename directory
   ScaleFactor =  GetIntParam(inname, "ScaleFactor", 1, VerboseLevel);     // Power of 2 that sets the grid size
   // ScaleFactor = 1 means grid size is 5/6 micron, 128 grids in the z-direction
-  nsteps = 2 + (int)(log2(ScaleFactor));  
+  nsteps = 3 + (int)(log2(ScaleFactor));  
   printf("There will be %d total multi-grids\n",(nsteps+1));  
   // nsteps is the number of reduction steps in the Vcycle_Inner Cycle.
   // Poisson solver constants
@@ -739,11 +739,11 @@ void MultiGrid::BuildArrays(Array3D** phi, Array3D** rho, Array3D** elec, Array3
   return;
 }
 
-void MultiGrid::SetInitialVoltages(Array3D* phi, Array2DInt* BCType, Array2DInt* Vkmin, Array2D* QFe)
+void MultiGrid::SetInitialVoltages(Array3D* phi, Array2DInt* BCType, Array2D* QFe)
 {
   // This sets up the initial voltages on the boundaries
   // It also sets up QFe
-  int i, j, k, n, m, index, index2;
+  int i, j, n, m, index;
   int PixX, PixY;
   double PixXmin, PixYmin, PixXmax, PixYmax, DeltaQFe;
   double ContactXmin, ContactXmax, ContactYmin, ContactYmax, ContactVoltage;
@@ -794,11 +794,7 @@ void MultiGrid::SetInitialVoltages(Array3D* phi, Array2DInt* BCType, Array2DInt*
 	      if (phi->x[i] >= ContactXmin && phi->x[i] <= ContactXmax && phi->y[j] >= ContactYmin && phi->y[j] <= ContactYmax)
 		{
 		  // In contact region
-		  for (k=0; k<Vkmin->data[index]; k++)
-		    {
-		      index2 = index + k * phi->nx * phi->ny;
-		      phi->data[index2] = ContactVoltage;
-		    }
+		  phi->data[index] = ContactVoltage;
 		  BCType->data[index] = 0;
 		  // The temperature is so low, that QFe is pinned at midgap
 		  DeltaQFe = ktq * (log(ContactDoping / pow(MICRON_PER_CM, 3)) - logNi);  
@@ -808,7 +804,7 @@ void MultiGrid::SetInitialVoltages(Array3D* phi, Array2DInt* BCType, Array2DInt*
 		{
 		  // Between contacts
 		  BCType->data[index] = 1;
-		  phi->data[index2] = ContactVoltage;		  
+		  phi->data[index] = ContactVoltage;		  
 		  QFe->data[index] = ContactVoltage;		  
 		}
 	    }
@@ -864,12 +860,16 @@ void MultiGrid::SetFixedAndMobileCharges(Array3D* rho, Array3D* hole, Array3D* e
   // SORChargeFactor convert number of electrons or holes into charge units
   // Set the background charge:
   //printf("rhoNx=%d,rhoNy=%d,rhoNz=%d\n",rho->nx,rho->ny,rho->nz);
-  printf("PRLLX=%f, PRLLY=%f,PRURX=%f,PRURY=%f\n",PixelRegionLowerLeft[0][0],PixelRegionLowerLeft[0][1],PixelRegionUpperRight[0][0],PixelRegionUpperRight[0][1]);
   for (i=0; i<rho->nx; i++)
     {
       for (j=0; j<rho->ny; j++)
 	{
 	  index = i + j * rho->nx;
+	  for (k=0; k<Ckmin->data[index]; k++)
+	    {
+	      index2 = index + k * rho->nx * rho->ny;
+	      rho->data[index2] = 0.0;
+	    }
 	  for (k=Ckmin->data[index]; k<rho->nz-1; k++)
 	    {
 	      index2 = index + k * rho->nx * rho->ny;
@@ -1239,7 +1239,7 @@ double MultiGrid::Error_Inner(Array3D* phi, Array3D* rho, Array3D* elec, Array3D
   return error;
 }
 
-void MultiGrid::Prolongate(Array3D* phi, Array3D* newphi, Array3D* elec, Array3D* newelec, Array3D* hole, Array3D* newhole, Array2DInt* newBCType, Array2DInt* newVkmin, Array2DInt* newCkmin)
+void MultiGrid::Prolongate(Array3D* phi, Array3D* newphi, Array2DInt* newBCType, Array2DInt* newVkmin)
 {
   // This propagates a solution at one grid scale up to the next finer scale.
   // Assumes fixed potentials on the top, mixture of fixed and free BC on bottom, free or periodic BC on the sides.
@@ -1247,9 +1247,9 @@ void MultiGrid::Prolongate(Array3D* phi, Array3D* newphi, Array3D* elec, Array3D
   int newindex, newindex2=0;
   int indpmm, indpmp, indppm, indppp;
   int indmmm, indmmp, indmpm, indmpp;
-  double zrp=0.0, zrm=0.0; // z-axis height ratios
-  double newelecsum, newholesum;
-  if (VerboseLevel >2) printf("In Prolongate. Starting.kmax = %d, newkmax = %d\n",elec->nz, newelec->nz);
+  //double zrp=0.0, zrm=0.0; // z-axis height ratios
+  //double newelecsum, newholesum;
+  if (VerboseLevel >2) printf("In Prolongate. Starting.kmax = %d, newkmax = %d\n",phi->nz, newphi->nz);
   nxy = phi->nx * phi->ny;
   newnxy = newphi->nx * newphi->ny;
   for (i=0; i<newphi->nx; i++)
@@ -1289,6 +1289,7 @@ void MultiGrid::Prolongate(Array3D* phi, Array3D* newphi, Array3D* elec, Array3D
 	      newphi->data[newindex2] = (phi->data[indmmm] + phi->data[indmmp] + phi->data[indmpm] + phi->data[indmpp] + phi->data[indpmm] + phi->data[indpmp] + phi->data[indppm] + phi->data[indppp]) / 8.0;
 	    }
 	  /*
+	    Commenting this out for now
 	  // Prolongate the electrons and holes up to the next level
 	  for (k=min(0,newCkmin->data[newindex]-1); k<newelec->nz-1; k++)
 	    {
@@ -1319,18 +1320,18 @@ void MultiGrid::Prolongate(Array3D* phi, Array3D* newphi, Array3D* elec, Array3D
 		  newhole->data[newindex2] = newholesum;		  
 		}
 	    }
-	  */
+
 	  if (isnan(newelec->data[newindex2]) || isnan(newhole->data[newindex2]))
 	    {
 	      printf("Nan encountered in electron/hole prolongate! Quitting!\n");
 	      printf("i=%d,j=%d,k=%d,im=%d,jm=%d,km=%d,ip=%d,jp=%d,kp=%d,zrm=%f,zrp=%f\n",i,j,k,im,jm,km,ip,jp,kp,zrm,zrp);
 	      exit(0);
 	    }
-	  
 	  if (VerboseLevel > 0 && i == 32 && j == 32)// && newelec->data[newindex2] > 1.0E-18)
 	    {
 	      printf("In Prolongate. i=%d,j=%d,k=%d,km=%d,kp=%d,zrp=%f,zrm=%f, newelec=%f, newhole=%f\n",i,j,k,km,kp,zrp,zrm,newelec->data[newindex2],newhole->data[newindex2]);
 	    }
+	  */
 	}
     }
   return;
@@ -1362,7 +1363,7 @@ void MultiGrid::VCycle_Inner(Array3D** phi, Array3D** rho, Array3D** elec, Array
       CountCharges(rho, elec, hole);      	  
       if ( i > 0)
 	{
-	  Prolongate(phi[i], phi[i-1], elec[i], elec[i-1], hole[i], hole[i-1], BCType[i-1],Vkmin[i-1],Ckmin[i-1]);
+	  Prolongate(phi[i], phi[i-1], BCType[i-1],Vkmin[i-1]);
 	}
       printf("After Prolongate\n");
       CountCharges(rho, elec, hole);      	  
@@ -2693,7 +2694,7 @@ void MultiGrid::Setkmins(Array3D** rho, Array2DInt** Ckmin, Array2DInt** Vkmin)
 		    {
 		      // Between contacts
 		      Ckmin[n]->data[index] = rho[n]->ZIndex(BottomOxide);
-		      Vkmin[n]->data[index] = 1;
+		      Vkmin[n]->data[index] = 0;
 		    }
 		}
 	    }

@@ -191,11 +191,11 @@ class MultiGrid
   void BuildArrays(Array3D**, Array3D**, Array3D**, Array3D**, Array3D**, Array2DInt**, Array2D**, Array2D**, Array2DInt**, Array2DInt**);
   void SaveGrid();
   void SaveGridMulti();  
-  void SetInitialVoltages(Array3D*, Array2DInt*, Array2DInt*, Array2D*);
+  void SetInitialVoltages(Array3D*, Array2DInt*, Array2D*);
   void SetFixedAndMobileCharges(Array3D*, Array3D*, Array3D*, Array2DInt*);
   double SOR_Inner(Array3D*, Array3D*, Array3D*, Array3D*, Array2DInt*, Array2D*, Array2D*, Array2DInt*, Array2DInt*);
   double Error_Inner(Array3D*, Array3D*, Array3D*, Array3D*, Array2DInt*, Array2DInt*);
-  void Prolongate(Array3D*, Array3D*, Array3D*, Array3D*, Array3D*, Array3D*, Array2DInt*, Array2DInt*, Array2DInt*);
+  void Prolongate(Array3D*, Array3D*, Array2DInt*, Array2DInt*);
   void VCycle_Inner(Array3D**, Array3D**, Array3D**, Array3D**, Array2DInt**, Array2D**, Array2D**, Array2DInt**, Array2DInt**, int, int);
   void WriteOutputFile(string, string, string, Array3D*);
   void ReadOutputFile(string, string, string, Array3D*);

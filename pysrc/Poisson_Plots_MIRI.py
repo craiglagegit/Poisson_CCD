@@ -17,7 +17,6 @@ from pysubs import *  # These are the plotting subroutines
 
 configfile = sys.argv[1]
 run = int(sys.argv[2])
-multi = int(sys.argv[3])
 
 ConfigData = ReadConfigFile(configfile)
 
@@ -25,7 +24,7 @@ outputfilebase = ConfigData["outputfilebase"]
 outputfiledir = ConfigData["outputfiledir"]
 
 # This holds all of the data
-dat = Array3dHDF5(outputfiledir, outputfilebase, run, multi=multi)
+dat = Array3dHDF5(outputfiledir, outputfilebase, run)
 
 ScaleFactor = ConfigData["ScaleFactor"]
 GridsPerPixelX = ConfigData["GridsPerPixelX"]
@@ -40,11 +39,11 @@ nzz = dat.nz - 1
 nxcenter = int(nxx/2)
 nycenter = int(nyy/2)
 nxcenter2 = nxcenter
-nxcenter3 = int(nxcenter2 + GridsPerPixelX * ScaleFactor / 2 / 2**(multi))
+nxcenter3 = int(nxcenter2 + GridsPerPixelX * ScaleFactor / 2)
 
 NumPixelsPlotted = 1
 nycenter2 = nycenter
-nycenter3 = int(nycenter2 + GridsPerPixelY * ScaleFactor / 2/ 2**(multi))
+nycenter3 = int(nycenter2 + GridsPerPixelY * ScaleFactor / 2)
 
 nymin = int(nycenter - (NumPixelsPlotted * ScaleFactor * GridsPerPixelY)/2)
 nymax = int(nycenter + (NumPixelsPlotted * ScaleFactor * GridsPerPixelY)/2)
