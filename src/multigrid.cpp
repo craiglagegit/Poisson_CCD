@@ -559,6 +559,12 @@ void MultiGrid::ReadConfigurationFile(string inname)
 		  DeltaVPixelCoords[i][j][k] = 0.0;
 		}
 	      DeltaVPixelCoords[i][j] = GetDoubleList(inname, "DeltaVPixelCoords_"+regionnum+"_"+fillednum, 2, DeltaVPixelCoords[i][j], VerboseLevel);
+	      /*
+	      for (k=0; k<2; k++)
+		{
+		  printf("i=%d,j=%d,k=%d,DeltaV=%f\n",i,j,k,DeltaVPixelCoords[i][j][k]);
+		}
+	      */
 	    }
 	}
     }
@@ -736,7 +742,7 @@ void MultiGrid::SetInitialVoltages(Array3D* phi, Array2DInt* BCType, Array2DInt*
 {
   // This sets up the initial voltages on the boundaries
   // It also sets up QFe
-  int i, j, n, m, index, index2;
+  int i, j, k, n, m, index, index2;
   int PixX, PixY;
   double PixXmin, PixYmin, PixXmax, PixYmax, DeltaQFe;
   double ContactXmin, ContactXmax, ContactYmin, ContactYmax, ContactVoltage;
@@ -776,22 +782,24 @@ void MultiGrid::SetInitialVoltages(Array3D* phi, Array2DInt* BCType, Array2DInt*
 	      // Bring in Delta Vs
 	      for (n=0; n<NumberofContactDeltaVs[m]; n++)
 		{
-		  if (DeltaVPixelCoords[m][n][0] >PixXmin && DeltaVPixelCoords[m][n][0] <PixXmax && DeltaVPixelCoords[m][n][1] >PixYmin && DeltaVPixelCoords[m][n][1] >PixYmax)
+		  if (DeltaVPixelCoords[m][n][0] >PixXmin && DeltaVPixelCoords[m][n][0] <PixXmax && DeltaVPixelCoords[m][n][1] >PixYmin && DeltaVPixelCoords[m][n][1] <PixYmax)
 		    {
 		      ContactVoltage += DeltaV[m][n];
 		    }
 		}
+	      //printf("PixX=%d, PixXmin=%f, PixXmax=%f, PixY=%d, PixYmin=%f, PixYmax=%f,ContactVoltage=%f\n",PixX, PixXmin,PixXmax,PixY, PixYmin, PixYmax,ContactVoltage);
 	      ContactYmin = PixYmin + (PixelSizeY - ContactHeight) / 2.0;
 	      ContactYmax = ContactYmin + ContactHeight;
 	      if (phi->x[i] >= ContactXmin && phi->x[i] <= ContactXmax && phi->y[j] >= ContactYmin && phi->y[j] <= ContactYmax)
 		{
 		  // In contact region
-		  index2 = index + Vkmin->data[index] * phi->nx * phi->ny;
-		  //phi->data[index] = Vcontact;
-		  phi->data[index2] = Vcontact;
+		  for (k=0; k<Vkmin->data[index]; k++)
+		    {
+		      index2 = index + k * phi->nx * phi->ny;
+		      phi->data[index2] = ContactVoltage;
+		    }
 		  BCType->data[index] = 0;
 		  // The temperature is so low, that QFe is pinned at midgap
-
 		  DeltaQFe = ktq * (log(ContactDoping / pow(MICRON_PER_CM, 3)) - logNi);  
 		  QFe->data[index] = ContactVoltage - DeltaQFe;
 		}
@@ -862,7 +870,7 @@ void MultiGrid::SetFixedCharges(Array3D* rho, Array2DInt* Ckmin)
 	      if (rho->z[k] > (SensorThickness - TopDopingThickness))
 		{
 		  rho->data[index2] = TopSurfaceDoping * ChargeFactor;
-		  printf("k=%d, z=%.2f, Dop=%f\n",k,rho->z[k], rho->data[index2]);
+		  //printf("k=%d, z=%.2f, Dop=%f\n",k,rho->z[k], rho->data[index2]);
 		}
 	      else
 		{
@@ -962,10 +970,10 @@ double MultiGrid::SOR_Inner(Array3D* phi, Array3D* rho, Array3D* elec, Array3D* 
   double logSORChargeFactor =  log(SORChargeFactor);
   double MinElec = 1.0E-6; // electron concentrations are not adjusted below this value
   double MinDeltaPhi = ktq * log(MinElec) - logNi - logSORChargeFactor; // This controls where we calculate mobile carriers
-  printf("MinDeltaPhi=%f\n",MinDeltaPhi);
-  MinDeltaPhi = 0.1;
+  //printf("MinDeltaPhi=%f\n",MinDeltaPhi);
+  MinDeltaPhi = 0.2;
   double MaxExponent = 10.0;
-  printf("MinDeltaPhi=%f\n",MinDeltaPhi);
+  //printf("MinDeltaPhi=%f\n",MinDeltaPhi);
   double DeltaPhi, MaxDeltaPhi = 0.1;   // This limits the change in phi per cycle and helps convergence.
   bool InnerLoop;
   double ElecCharge=0.0, HoleCharge=0.0, Term1=0.0, Term2=0.0, CellVolume=0.0, AveIterations = 0.0;
@@ -1094,7 +1102,7 @@ double MultiGrid::SOR_Inner(Array3D* phi, Array3D* rho, Array3D* elec, Array3D* 
 			      oldnewphi = newphi;
 			      exponent = logNi + (QFh->data[ind2] - newphi) / ktq + logSORChargeFactor;
 			      exponent = min(MaxExponent, exponent);// Prevents ElecCharge getting too large
-			      HoleCharge = 0.0;//exp(exponent);
+			      HoleCharge = exp(exponent);
 			      Term2 = hsquared * w6 * HoleCharge / ktq;
 			      if (fabs(1.0 + Term2) < 1.0E-18) break;
 			      newphi = newphi - (newphi - (w6 * hsquared * HoleCharge + Term1)) / (1.0 + Term2);	  
@@ -2537,7 +2545,8 @@ void MultiGrid::Set_QFh(Array2D** QFh)
 {
   //Set hole quasi-Fermi level in the region.
   int i, j, n, index;
-  double DeltaQFh;
+  double DeltaQFh = ktq * (log(-TopSurfaceDoping / pow(MICRON_PER_CM, 3)) - logNi);
+  printf("DeltaQFh=%f, QFh=%f\n",DeltaQFh, Vbb+DeltaQFh);
   for (n=0; n<nsteps+1; n++)
     {
       for (i=0; i<QFh[n]->nx; i++)
@@ -2546,9 +2555,7 @@ void MultiGrid::Set_QFh(Array2D** QFh)
 	    {
 	      index = i + j * QFh[n]->nx;
 	      // The temperature is so low, that QFh is pinned at midgap
-	      DeltaQFh = ktq * (log(TopSurfaceDoping / pow(MICRON_PER_CM, 3)) - logNi);  
 	      QFh[n]->data[index] = Vbb + DeltaQFh;
-	      //QFh[n]->data[index] = qfh;
 	    }
 	}
     }
