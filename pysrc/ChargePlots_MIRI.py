@@ -29,12 +29,14 @@ dat = Array3dHDF5(outputfiledir, outputfilebase, run)
 ScaleFactor = ConfigData["ScaleFactor"]
 GridsPerPixelX = ConfigData["GridsPerPixelX"]
 GridsPerPixelY = ConfigData["GridsPerPixelY"]
+SensorThickness = ConfigData["SensorThickness"]
 
 ZMult = 1.0
-kmax = int(dat.Elec.shape[2]-1)
+
 nxx = dat.nx - 1
 nyy = dat.ny - 1
 nzz = dat.nz - 1
+kmax = nzz
 nxcenter = int(nxx/2)
 nycenter = int(nyy/2)
 dnx = int(ScaleFactor*GridsPerPixelX/2)
@@ -46,7 +48,7 @@ nxmax = nxmin + NumPixelsPlotted * 2 * dnx
 nymin = nycenter - NumPixelsPlotted * dny
 nymax = nymin + NumPixelsPlotted * 2 * dny
 
-ChargeDepth(dat, outputfiledir+'/charge.txt',  nxcenter, nycenter, dnx, dny, dat.Elec.shape[2])
+zTicks = range(0, int(SensorThickness) + 1, 5)
 
 carriers = ['Electron', 'Hole', 'LogHole', 'Mobile', 'Fixed']
 
@@ -76,7 +78,7 @@ for i, plotdata in enumerate(plotdatas):
     ax2=plt.axes([0.10,0.20,0.50,0.20], aspect=1)
     ax2.set_title("X-Z Slice")
     ax2.set_xticks([])
-    ax2.set_yticks([0.0,2.0,4.0])
+    ax2.set_yticks(zTicks)
     [plotarray, dxx, dyy, levels, my_cmap] = BuildPlotArray(dat, plotdata, 1, nxmin, nxmax, 0, kmax, nymin, nymax, ZMult, ForceZeros[i], cmaps[i])
     ax2.contourf(dxx, dyy, plotarray, levels = levels, cmap = my_cmap, extend='both')
 
@@ -90,7 +92,7 @@ for i, plotdata in enumerate(plotdatas):
     
     ax4=plt.axes([0.60,0.40,0.20,0.50], aspect=1)
     ax4.set_title("Y-Z Slice")
-    ax4.set_xticks([0.0,2.0,4.0])
+    ax4.set_xticks(zTicks)
     ax4.set_yticks([])
     [plotarray, dxx, dyy, levels, my_cmap] = BuildPlotArray(dat, plotdata, 0, 0, kmax, nymin, nymax, xslicemins[i], xslicemaxs[i], ZMult, ForceZeros[i], cmaps[i])
     ax4.contourf(dxx, dyy, plotarray, levels = levels, cmap = my_cmap, extend='both')        
@@ -112,7 +114,7 @@ for i, plotdata in enumerate(plotdatas):
     ax6=plt.axes([0.65,0.20,0.10,0.10])
     ax6.set_title("Z-Cut", fontsize=24)
     ax6.set_ylabel("Log Charge \n Density \n(arb. units)", fontsize=18)
-    ax6.set_xticks([0.0,1.0,2.0])
+    ax6.set_xticks(zTicks)
     ax6.set_xlabel("Z ( Microns)", fontsize=18)
     ax6.yaxis.set_label_position("right")
     ax6.set_ylim(-4.0, 1.0)

@@ -987,7 +987,7 @@ double MultiGrid::SOR_Inner(Array3D* phi, Array3D* rho, Array3D* elec, Array3D* 
   bool InnerLoop;
   double ElecCharge=0.0, HoleCharge=0.0, Term1=0.0, Term2=0.0, CellVolume=0.0, AveIterations = 0.0;
   double NumElec=0.0, NumHoles=0.0, TotalHoles=0.0, TotalElectrons=0.0;
-  int nn = 0, mm = 0, iter_counter, iter_limit = 100000, red_black;
+  int nn = 0, mm = 0, iter_counter, iter_limit = 10000, red_black;
   int i, j, k, kstart, kmax, im, ip, j0, jm, jp, nxy, ind, ind2, indmx, indpx, indmy, indpy, indmz, indpz;
   kmax = min(phi->nz - 1, elec->nz-1);
   nxy = phi->nx * phi->ny;
@@ -1347,7 +1347,7 @@ void MultiGrid::VCycle_Inner(Array3D** phi, Array3D** rho, Array3D** elec, Array
   double error = 100.0, AveIterations;
   for (i=stepstart; i>-1; i--)
     {
-      niter = ncycle * (int)pow(4,i);      
+      niter = ncycle * (int)pow(2,i);      
       NumSOR = 0;
       AveIterations = 0;
       for (j=0; j<niter; j++)
@@ -1359,14 +1359,14 @@ void MultiGrid::VCycle_Inner(Array3D** phi, Array3D** rho, Array3D** elec, Array
       // And here's where we evaluate the residual error.
       error = Error_Inner(phi[i], rho[i], elec[i], hole[i], BCType[i], Vkmin[i]);      
       // Copy the solution to the next higher level
-      printf("Before Prolongate\n");
-      CountCharges(rho, elec, hole);      	  
+      //printf("Before Prolongate\n");
+      //CountCharges(rho, elec, hole);      	  
       if ( i > 0)
 	{
 	  Prolongate(phi[i], phi[i-1], BCType[i-1],Vkmin[i-1]);
 	}
-      printf("After Prolongate\n");
-      CountCharges(rho, elec, hole);      	  
+      //printf("After Prolongate\n");
+      //CountCharges(rho, elec, hole);      	  
 
       if(VerboseLevel > 1)
 	{
