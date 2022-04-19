@@ -99,7 +99,7 @@ def ReadConfigFile(filename):
     return config
 
 
-def BuildPlotArray(dat, plotdata, axis, nxmin, nxmax, nymin, nymax, nzmin, nzmax, ZMult, ForceZero, cmap):
+def BuildPlotArray(dat, plotdata, axis, nxmin, nxmax, nymin, nymax, nzmin, nzmax, ZMult, ForceZero, cmap, specialColors=True):
     # This builds a 2D array for use with the charge plotting
     plotarray = np.zeros([nxmax-nxmin+1,nymax-nymin+1])
     dxx = np.zeros([nxmax-nxmin+1])
@@ -155,9 +155,9 @@ def BuildPlotArray(dat, plotdata, axis, nxmin, nxmax, nymin, nymax, nzmin, nzmax
     if axis == 1:
         for i in range(nxmax-nxmin+1):
             plotarray[i,1] =  vmin-1.0E6
-
-    cmap.set_under("green")
-    cmap.set_over("yellow")
+    if specialColors:
+        cmap.set_under("green")
+        cmap.set_over("yellow")
                 
     [pyy,pxx] = np.meshgrid(dyy, dxx)# Data grid for plots
     return [plotarray, pxx, pyy, levels, cmap]

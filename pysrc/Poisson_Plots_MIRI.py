@@ -40,7 +40,7 @@ dat = Array3dHDF5(outputfiledir, outputfilebase, run)
 ScaleFactor = ConfigData["ScaleFactor"]
 GridsPerPixelX = ConfigData["GridsPerPixelX"]
 GridsPerPixelY = ConfigData["GridsPerPixelY"]
-ChargeFactor = 1.6E-19 * 1.0E6 / (11.7 * 8.85E-12)/((dat.x[1]-dat.x[0])*(dat.y[1]-dat.y[0])) #(QE*MICRON_PER_M/(EPSILON_0*EPSILON_SI))/(dx*dy)
+
 
 SensorThickness = ConfigData["SensorThickness"]
 ContactVoltage = ConfigData["Vcontact"]
@@ -68,6 +68,7 @@ nxmax = int(nxcenter + (NumPixelsPlotted * ScaleFactor * GridsPerPixelX)/2)
 
 nzmin = 0
 nzmax = nzz
+
 """
 print("Center")
 for k in range(dat.nz):
@@ -80,8 +81,8 @@ for k in range(dat.nz):
 print("Corner")
 for k in range(dat.nz):
     print(f"k={k}, z={dat.z[k]}, Rho={dat.rho[nxcenter3,nycenter3,k]}, elec = {dat.Elec[nxcenter3,nycenter3,k]}, hole = {dat.Hole[nxcenter3,nycenter3,k]}, Phi={dat.phi[nxcenter3,nycenter3,k]}")
-
 """
+
 
 # Create the output directory if it doesn't exist
 if not os.path.isdir(outputfiledir+"/plots"):
@@ -139,7 +140,30 @@ ax3.set_yticks(zTicks)
 [plotarray, dxx, dyy, levels, my_cmap] = BuildPlotArray(dat, logHoleData, 1, nxmin, nxmax,kmin, nzz, nymin, nymax, 1.0, False, cmap0, specialColors=False)
 ax3.contourf(dxx, dyy, plotarray, levels = levels, cmap = my_cmap, extend='both')
 
-
-
 plt.savefig(outputfiledir+"/plots/"+outputfilebase+"_Summary_%d.pdf"%run)
 
+
+print("Making dopant plot\n")
+
+numzs = 25 # controls how deep the plot goes
+# Converts doping in code units back into cm^-3
+# ChargeFactor = (QE*MICRON_PER_M/(EPSILON_0*EPSILON_SI)) / pow(MICRON_PER_CM, 3);
+ChargeFactor = 1.6E-19 * 1.0E6 / (11.7 * 8.85E-12) / 1.0E12
+PixelVolume = (dat.x[1] - dat.x[0]) * (dat.y[1] - dat.y[0]) * dat.dz[0:numzs] / 1.0E12 
+plt.figure()
+plt.suptitle("MIRI Simulation. Grid = %d*%d*%d."%(nxx,nyy,nzz),fontsize = 12)
+
+plt.title("Contact Doping", fontsize=12)
+
+plt.plot(dat.z[0:numzs], dat.rho[nxcenter,nycenter,0:numzs] / ChargeFactor, color = 'green', label = "Fixed charge")
+
+plt.plot(dat.z[0:numzs], dat.Elec[nxcenter,nycenter,0:numzs] / PixelVolume, label = "Electrons", color = 'red', ls = ':')
+
+plt.legend(loc = "upper right")
+plt.xlabel("Z-Dimension (microns)", fontsize=12)
+plt.ylabel('$\\rho(x,y,z)$ cm$^3$')
+
+#plt.ylim(-100.0, 100.0)
+plt.xlim(0.0,1.0)
+
+plt.savefig(outputfiledir+"/plots/"+outputfilebase+"_ContactDoping_%d.pdf"%run)

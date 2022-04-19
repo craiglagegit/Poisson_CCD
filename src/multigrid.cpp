@@ -462,7 +462,22 @@ void MultiGrid::ReadConfigurationFile(string inname)
   logNi = log(NS) + 1.5 * log(CCDTemperature / 300.0) + ( - QE * EG / (2.0 * KBOLTZMANN * CCDTemperature)) - log(pow(MICRON_PER_CM, 3.0));   // log of intrinsic carrier concentration per micron^3
   ktq = .026 * CCDTemperature / 300.0;//KBOLTZMANN * CCDTemperature / QE;
   printf("log of intrinsic carrier concentration logNi = %g in code units, kT/q = %f Volts\n",logNi,ktq);
-  printf("Delta QFe = %f\n", (ktq * (log(ContactDoping / pow(MICRON_PER_CM, 3)) - logNi)));  
+  double DeltaQFe;
+  if (ContactProfile == 0)
+    {
+      DeltaQFe = ktq * (log(ContactDoping / pow(MICRON_PER_CM, 3)) - logNi);  
+    }
+  else if (ContactProfile == 1)
+    {
+      double EffectiveContactDoping = ContactDose[0] / ContactSigma[0] * MICRON_PER_M;
+      DeltaQFe = ktq * (log(EffectiveContactDoping / pow(MICRON_PER_CM, 3)) - logNi);  
+    }
+  else
+    {
+      printf("More than one Gaussian not yet implemented");
+      exit(0);
+    }
+  printf("Delta QFe = %f\n", DeltaQFe);
   printf("Delta QFh = %f\n", (ktq * (log(-TopSurfaceDoping / pow(MICRON_PER_CM, 3)) - logNi)));
   DiffMultiplier = GetDoubleParam(inname, "DiffMultiplier", 2.30, VerboseLevel);
   TopAbsorptionProb = GetDoubleParam(inname, "TopAbsorptionProb", 0.0, VerboseLevel);
@@ -797,7 +812,20 @@ void MultiGrid::SetInitialVoltages(Array3D* phi, Array2DInt* BCType, Array2D* QF
 		  phi->data[index] = ContactVoltage;
 		  BCType->data[index] = 0;
 		  // The temperature is so low, that QFe is pinned at midgap
-		  DeltaQFe = ktq * (log(ContactDoping / pow(MICRON_PER_CM, 3)) - logNi);  
+		  if (ContactProfile == 0)
+		    {
+		      DeltaQFe = ktq * (log(ContactDoping / pow(MICRON_PER_CM, 3)) - logNi);  
+		    }
+		  else if (ContactProfile == 1)
+		    {
+		      double EffectiveContactDoping = ContactDose[0] / ContactSigma[0] * MICRON_PER_M;
+		      DeltaQFe = ktq * (log(EffectiveContactDoping / pow(MICRON_PER_CM, 3)) - logNi);  
+		    }
+		  else
+		    {
+		      printf("More than one Gaussian not yet implemented");
+		      exit(0);
+		    }
 		  QFe->data[index] = ContactVoltage - DeltaQFe;
 		}
 	      else
@@ -987,7 +1015,7 @@ double MultiGrid::SOR_Inner(Array3D* phi, Array3D* rho, Array3D* elec, Array3D* 
   bool InnerLoop;
   double ElecCharge=0.0, HoleCharge=0.0, Term1=0.0, Term2=0.0, CellVolume=0.0, AveIterations = 0.0;
   double NumElec=0.0, NumHoles=0.0, TotalHoles=0.0, TotalElectrons=0.0;
-  int nn = 0, mm = 0, iter_counter, iter_limit = 10000, red_black;
+  int nn = 0, mm = 0, iter_counter, iter_limit = 100000, red_black;
   int i, j, k, kstart, kmax, im, ip, j0, jm, jp, nxy, ind, ind2, indmx, indpx, indmy, indpy, indmz, indpz;
   kmax = min(phi->nz - 1, elec->nz-1);
   nxy = phi->nx * phi->ny;
@@ -2833,7 +2861,7 @@ void MultiGrid::SetCharge(Array3D* rho, Array3D* hole, Array3D* elec, Array2DInt
   double CellVolume, NumElec, NumHoles;
   double SORChargeFactor =  QE*MICRON_PER_M/(EPSILON_0*EPSILON_SI);
   // SORChargeFactor convert number of electrons or holes into charge units
-  double Charge=0.0, Sigma=0.0, Dose=0.0, Peak=0.0, Sum = 0.0;
+  double Charge=0.0, AddedCharge=0.0, Sigma=0.0, Dose=0.0, Peak=0.0, Sum = 0.0;
   double Zmin, Zmax, Total;
   double Qss=0.0;
   
@@ -2841,7 +2869,7 @@ void MultiGrid::SetCharge(Array3D* rho, Array3D* hole, Array3D* elec, Array2DInt
     {
       Profile = ContactProfile;
       Depth = ContactDepth;
-      Charge = ContactDoping * MICRON_PER_CM  * ChargeFactor;
+      AddedCharge = ContactDoping * MICRON_PER_CM  * ChargeFactor;
     }
   else
     {
@@ -2857,7 +2885,7 @@ void MultiGrid::SetCharge(Array3D* rho, Array3D* hole, Array3D* elec, Array2DInt
 	  index2 = index + k * rho->nx * rho->ny;
 	  rho->data[index2] += Charge / ChargeDepth;
 	  CellVolume = rho->dx * rho->dy * rho->zw[k];
-	  if  (Charge > 0.0)
+	  if  (AddedCharge > 0.0)
 		{
 		  // Now add electrons equal to fixed charge
 		  NumElec = rho->data[index2] / SORChargeFactor * CellVolume;		  
@@ -2884,7 +2912,7 @@ void MultiGrid::SetCharge(Array3D* rho, Array3D* hole, Array3D* elec, Array2DInt
 	    }
 	  if (VerboseLevel > 2 && i == rho->nx/2 && j == rho->ny/2) Sum = 0.0;
 	  kmax = rho->ZIndex(rho->z[Ckmin->data[index]] + 4.0 * Sigma + Peak);
-	  Charge =  Dose * MICRON_PER_CM  * ChargeFactor;// * TaperRatio;
+	  Charge =  Dose * MICRON_PER_CM  * ChargeFactor;
 	  Zmin = rho->zmz[Ckmin->data[index]];
 	  Zmax = rho->zpz[kmax];
 	  Total = erf((Zmax - Zmin - Peak) / (sqrt(2.0) * Sigma)) + erf(Peak / (sqrt(2.0) * Sigma));
@@ -2897,8 +2925,23 @@ void MultiGrid::SetCharge(Array3D* rho, Array3D* hole, Array3D* elec, Array2DInt
 	    }
 	  for (k=Ckmin->data[index]; k<kmax+1; k++)
 	    {
+	      CellVolume = rho->dx * rho->dy * rho->zw[k];	      
 	      index2 = index + k * rho->nx * rho->ny;
-	      rho->data[index2] += Charge / Total / rho->zw[k] * (erf((rho->zpz[k] - Zmin - Peak) / (sqrt(2.0) * Sigma)) - erf((rho->zmz[k] - Zmin - Peak) / (sqrt(2.0) * Sigma)));
+	      AddedCharge = Charge / Total / rho->zw[k] * (erf((rho->zpz[k] - Zmin - Peak) / (sqrt(2.0) * Sigma)) - erf((rho->zmz[k] - Zmin - Peak) / (sqrt(2.0) * Sigma)));
+	      rho->data[index2] += AddedCharge; 
+	      if  (AddedCharge > 0.0)
+		{
+		  // Now add electrons equal to fixed charge
+		  NumElec = AddedCharge / SORChargeFactor * CellVolume;		  
+		  elec->data[index2] += NumElec;
+		}
+	      else
+		{
+		  // Now add holes equal to fixed charge
+		  NumHoles = - AddedCharge / SORChargeFactor * CellVolume;		  
+		  hole->data[index2] += NumHoles;
+		}
+
 	      if (VerboseLevel > 2 && i == rho->nx/2 && j == rho->ny/2) Sum += rho->data[index2] * rho->zw[k];
 	      if (isnan(rho->data[index2]))
 		{
