@@ -106,6 +106,15 @@ ax1.contour(xx,yy,dat.phi[nxmin:nxmax,nymin:nymax,slicez],levels,linewidths=0.1,
 img1 = ax1.contourf(xx,yy,dat.phi[nxmin:nxmax,nymin:nymax,slicez],levels,cmap='jet')
 ax1.set_xlabel("X-Dimension (microns)", fontsize=12)
 ax1.set_ylabel("Y-Dimension (microns)", fontsize=12)
+# Add text with Vcontact
+for i in range(NumPixelsPlotted):
+    for j in range(NumPixelsPlotted):
+        nxpix = nxcenter + GridsPerPixelX * ScaleFactor * int(i - (NumPixelsPlotted - 1) / 2)
+        nypix = nycenter + GridsPerPixelY * ScaleFactor * int(j - (NumPixelsPlotted - 1) / 2)        
+        phi0 = dat.phi[nxpix,nypix,0]
+        xplot = dat.x[nxpix] - ConfigData["PixelSizeX"] * 0.28
+        yplot = dat.y[nypix] - ConfigData["PixelSizeY"] * 0.10
+        ax1.text(xplot, yplot, f"{phi0:.2f}", color='black', fontsize=6)
 colorbar(img1)
 ax1.set_label('$\phi(x,y,z)$ [V]')
 
