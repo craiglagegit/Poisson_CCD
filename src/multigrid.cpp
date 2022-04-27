@@ -56,7 +56,6 @@ MultiGrid::MultiGrid(string inname) //Constructor
   Setkmins(rho, Ckmin, Vkmin);
   for (n=0; n<nsteps+1; n++)
     {
-      SetInitialVoltages(phi[n], BCType[n], QFe[n]);
       SetFixedAndMobileCharges(rho[n], hole[n], elec[n], Ckmin[n]); // Place fixed charges
     }
   Set_QFh(QFh); // Set hole Quasi-Fermi level
@@ -83,6 +82,11 @@ MultiGrid::MultiGrid(string inname) //Constructor
   for (m=m_init; m<NumSteps; m++)
     {
       time1 = time(NULL);
+      UpdateDeltaVs();
+      for (int n=0; n<nsteps+1; n++)
+	{
+	  SetInitialVoltages(phi[n], BCType[n], QFe[n]);
+	}
       // Now we cycle through the VCycles to solve Poisson's equation
       for (int n=0; n<iterations; n++)
 	{
@@ -126,7 +130,6 @@ MultiGrid::MultiGrid(string inname) //Constructor
 	    }
 	}
       time1 = time(NULL);
-      // Now we trace the electrons.
       if (NumberofPixelRegions > 0)
 	{
 	  if (PixelBoundaryTestType == 0)
@@ -136,7 +139,7 @@ MultiGrid::MultiGrid(string inname) //Constructor
 	  if (PixelBoundaryTestType == 1)
 	    {
 	      TraceSpot(m);
-	      //WriteCollectedCharge(outputfiledir, outputfilebase+underscore+StepNum, "CC");
+	      WriteCollectedCharge(outputfiledir, outputfilebase+underscore+StepNum, "CC");
 	    }
 	  if (PixelBoundaryTestType == 2 || PixelBoundaryTestType == 4)
 	    {
@@ -145,7 +148,7 @@ MultiGrid::MultiGrid(string inname) //Constructor
 	  if (PixelBoundaryTestType == 5)
 	    {
 	      TraceList(m);
-	      //WriteCollectedCharge(outputfiledir, outputfilebase+underscore+StepNum, "CC");		   
+	      WriteCollectedCharge(outputfiledir, outputfilebase+underscore+StepNum, "CC");		   
 	    }
 	  /*
 	  if (PixelBoundaryTestType == 6)
@@ -227,15 +230,22 @@ MultiGrid::~MultiGrid() //Destructor
       for (m=0; m<NumberofContactDeltaVs[n]; m++)
 	{
 	  delete DeltaVPixelCoords[n][m];
+	  delete NewDeltaVPixelCoords[n][m];	  
 	}
       delete[] DeltaVPixelCoords[n];
+      delete[] NewDeltaVPixelCoords[n];      
+      delete[] CollectedCharge[n];
       delete[] DeltaV[n];
+      delete[] NewDeltaV[n];      
     }
   delete[] NumberofContactDeltaVs;
   delete[] PixelRegionLowerLeft;
   delete[] PixelRegionUpperRight;
   delete[] DeltaVPixelCoords;
+  delete[] NewDeltaVPixelCoords;  
+  delete[] CollectedCharge;  
   delete[] DeltaV;
+  delete[] NewDeltaV;  
 
   return;
 }
@@ -373,10 +383,32 @@ void MultiGrid::ReadPhotonList(string outputfiledir, string name)
     }
 }
 
+void MultiGrid::WriteCollectedCharge(string outputfiledir, string filenamebase, string name)
+{
+  // This writes the CollectedCharge file
+  int m, q, PixX, PixY;
+  string underscore = "_", slash = "/", filename;
+  filename = outputfiledir+slash+filenamebase+underscore+name+".dat";
+  ofstream cc_out(filename.c_str());
+  cc_out << setw(8) << "PixX" << setw(16) << "PixY" << setw(16) << "electrons" << endl;
+  for (m=0; m<NumberofPixelRegions; m++)
+    {
+      for (q=0; q<NewNumberofContactDeltaVs; q++)
+	{
+	  // First figure out the pixel coordinates
+	  PixY = (int)floor(q / PixelBoundaryNx);
+	  PixX = q - PixY * PixelBoundaryNx;
+	  cc_out << setw(8) << PixX << setw(16) << PixY << setw(16) << CollectedCharge[m][q] << endl;
+	}
+    }
+  cc_out.close();
+  printf("File %s successfully written\n", filename.c_str());
+}
+
 
 void MultiGrid::ReadConfigurationFile(string inname)
 {
-  int i, j, k;
+  int i, j, k, PixX, PixY;
   VerboseLevel = GetIntParam(inname, "VerboseLevel", 1, 2); // 0 - minimal output, 1 - normal, 2 - more verbose.
   outputfilebase  = GetStringParam(inname,"outputfilebase", "Test", VerboseLevel); //Output filename base
   outputfiledir  = GetStringParam(inname,"outputfiledir", "data", VerboseLevel); //Output filename directory
@@ -425,6 +457,7 @@ void MultiGrid::ReadConfigurationFile(string inname)
   // Voltages and Charges
   Vbb = GetDoubleParam(inname, "Vbb", -4.0, VerboseLevel);		        // Back bias
   Vcontact = GetDoubleParam(inname, "Vcontact", -2.0, VerboseLevel);	// Contact voltage
+  ContactCapacitance = GetDoubleParam(inname, "ContactCapacitance", 0.0, VerboseLevel);	// Contact capacitance
   BottomOxide = GetDoubleParam(inname, "BottomOxide", 0.15, VerboseLevel);
   BackgroundDoping = GetDoubleParam(inname, "BackgroundDoping", -1.0E12, VerboseLevel);
   TopSurfaceDoping = GetDoubleParam(inname, "TopSurfaceDoping", -1.0E12, VerboseLevel);
@@ -481,6 +514,7 @@ void MultiGrid::ReadConfigurationFile(string inname)
   printf("Delta QFh = %f\n", (ktq * (log(-TopSurfaceDoping / pow(MICRON_PER_CM, 3)) - logNi)));
   DiffMultiplier = GetDoubleParam(inname, "DiffMultiplier", 2.30, VerboseLevel);
   TopAbsorptionProb = GetDoubleParam(inname, "TopAbsorptionProb", 0.0, VerboseLevel);
+  RecombinationLifetime = GetDoubleParam(inname, "RecombinationLifetime", 1.0E-11, VerboseLevel);  
   SaturationModel = GetIntParam(inname, "SaturationModel", 0, VerboseLevel);
   NumDiffSteps = GetIntParam(inname, "NumDiffSteps", 1, VerboseLevel);
   EquilibrateSteps = GetIntParam(inname, "EquilibrateSteps", 100, VerboseLevel);
@@ -503,6 +537,9 @@ void MultiGrid::ReadConfigurationFile(string inname)
       NumberofContactDeltaVs = new int[NumberofPixelRegions];
       DeltaV = new double*[NumberofPixelRegions];      
       DeltaVPixelCoords = new double**[NumberofPixelRegions];
+      NewDeltaV = new double*[NumberofPixelRegions];      
+      NewDeltaVPixelCoords = new double**[NumberofPixelRegions];
+      CollectedCharge = new int*[NumberofPixelRegions];      
       for (i=0; i<NumberofPixelRegions; i++)
 	{
 	  regionnum = std::to_string(i);
@@ -531,7 +568,6 @@ void MultiGrid::ReadConfigurationFile(string inname)
       PixelBoundaryUpperRight = GetDoubleList(inname, "PixelBoundaryUpperRight", 2, PixelBoundaryUpperRight, VerboseLevel);
       PixelBoundaryNx = GetIntParam(inname, "PixelBoundaryNx", 9, VerboseLevel);
       PixelBoundaryNy = GetIntParam(inname, "PixelBoundaryNy", 9, VerboseLevel);
-      
       if (PixelBoundaryTestType == 0)
 	{
 	  for (j=0; j<2; j++)
@@ -575,12 +611,23 @@ void MultiGrid::ReadConfigurationFile(string inname)
 		  DeltaVPixelCoords[i][j][k] = 0.0;
 		}
 	      DeltaVPixelCoords[i][j] = GetDoubleList(inname, "DeltaVPixelCoords_"+regionnum+"_"+fillednum, 2, DeltaVPixelCoords[i][j], VerboseLevel);
-	      /*
-	      for (k=0; k<2; k++)
-		{
-		  printf("i=%d,j=%d,k=%d,DeltaV=%f\n",i,j,k,DeltaVPixelCoords[i][j][k]);
-		}
-	      */
+	    }
+	  NewNumberofContactDeltaVs = PixelBoundaryNx * PixelBoundaryNy; 
+	  CollectedCharge[i] = new int[NewNumberofContactDeltaVs];
+	  for (j=0; j<NewNumberofContactDeltaVs; j++)
+	    {
+	      CollectedCharge[i][j] = 0;
+	    }
+	  NewDeltaVPixelCoords[i] = new double*[NewNumberofContactDeltaVs];
+	  NewDeltaV[i] = new double[NewNumberofContactDeltaVs];
+	  for (j=0; j<NewNumberofContactDeltaVs; j++)
+	    {
+	      NewDeltaV[i][j] = 0.0;
+	      NewDeltaVPixelCoords[i][j] = new double[2];
+	      PixY = (int)floor(j / PixelBoundaryNx);
+	      PixX = j - PixY * PixelBoundaryNx;
+	      NewDeltaVPixelCoords[i][j][0] = PixelBoundaryLowerLeft[0] + ((double)PixX + 0.5) * PixelSizeX;
+	      NewDeltaVPixelCoords[i][j][1] = PixelBoundaryLowerLeft[1] + ((double)PixY + 0.5) * PixelSizeY;
 	    }
 	}
     }
@@ -591,6 +638,7 @@ void MultiGrid::ReadConfigurationFile(string inname)
       if (PhotonList == "None")
 	{
 	  printf("No PhotonList specified.  Quitting.");
+	  exit(0);
 	}
       else
 	{
@@ -634,47 +682,20 @@ void MultiGrid::ReadConfigurationFile(string inname)
       FixedRegionOxide[i] = GetIntParam(inname, "FixedRegionOxide_"+regionnum,0, VerboseLevel);
       FixedRegionBCType[i] = GetIntParam(inname, "FixedRegionBCType_"+regionnum,0, VerboseLevel);
     }
-
+  */
   if (CalculateZ0 == 1)
     {
-      // Filter band configuration.
-      FilterBand = GetStringParam(inname, "FilterBand", "none", VerboseLevel);
-      if(FilterBand == "u") {
-        FilterIndex = 0;
-      }
-      else if(FilterBand == "g") {
-        FilterIndex = 1;
-      }
-      else if(FilterBand == "r") {
-        FilterIndex = 2;
-      }
-      else if(FilterBand == "i") {
-        FilterIndex = 3;
-      }
-      else if(FilterBand == "z") {
-        FilterIndex = 4;
-      }
-      else if(FilterBand == "y") {
-        FilterIndex = 5;
-      }
-      else {
-        printf("No filter response will be used.\n");
-        FilterIndex = -1;
-      }
-      FilterFile = GetStringParam(inname, "FilterFile", "notebooks/depth_pdf.dat", VerboseLevel);
-      if(FilterIndex >= 0) {
-        ifstream filter_input(FilterFile.c_str());
-        string header;
-        getline(filter_input, header); // Skip header line
-        for(int i = 0; i < n_filter_cdf; i++) {
-	  for(int j = 0; j < n_band; j++) {
-	    assert(filter_input >> filter_cdf[j * n_filter_cdf + i]);
-	  }
-        }
-        filter_input.close();
-      }
+      Lambda = GetIntParam(inname,"Lambda",10.0, VerboseLevel);
+      if (Lambda < 5.0 || Lambda > 25.0)
+	{
+	  printf("Lambda must be >5.0 and <25.0.  Quitting");
+	  exit(0);
+	}
+      if (Lambda > 15.0)
+	{
+	  printf("Absorption model not proven for Lambda > 15.0, but using it anyway");	  
+	}
     }
-  */
   return;
 }
 
@@ -796,11 +817,11 @@ void MultiGrid::SetInitialVoltages(Array3D* phi, Array2DInt* BCType, Array2D* QF
 	      PixYmax = PixYmin + PixelSizeY;
 	      ContactVoltage = Vcontact;
 	      // Bring in Delta Vs
-	      for (n=0; n<NumberofContactDeltaVs[m]; n++)
+	      for (n=0; n<NewNumberofContactDeltaVs; n++)
 		{
-		  if (DeltaVPixelCoords[m][n][0] >PixXmin && DeltaVPixelCoords[m][n][0] <PixXmax && DeltaVPixelCoords[m][n][1] >PixYmin && DeltaVPixelCoords[m][n][1] <PixYmax)
+		  if (NewDeltaVPixelCoords[m][n][0] >PixXmin && NewDeltaVPixelCoords[m][n][0] <PixXmax && NewDeltaVPixelCoords[m][n][1] >PixYmin && NewDeltaVPixelCoords[m][n][1] <PixYmax)
 		    {
-		      ContactVoltage += DeltaV[m][n];
+		      ContactVoltage = Vcontact + NewDeltaV[m][n];
 		    }
 		}
 	      //printf("PixX=%d, PixXmin=%f, PixXmax=%f, PixY=%d, PixYmin=%f, PixYmax=%f,ContactVoltage=%f\n",PixX, PixXmin,PixXmax,PixY, PixYmin, PixYmax,ContactVoltage);
@@ -1640,10 +1661,10 @@ void MultiGrid::Trace(double* point, int bottomsteps, bool savecharge, double bo
 
   int i, j, k, tracesteps = 0, tracestepsmax = 10000;
   bool ReachedBottom = false;
-  double mu, E2, Emag, ve, vth, tau, Tscatt;
+  double mu, E2, Emag, ve, vth, tau, Tscatt, Recombined;
   double theta, phiangle, zmin, zmax, zbottom;
   zmax = SensorThickness;
-  zmin = ContactDepth;
+  zmin = ContactSigma[0];
   zbottom = 0.0;
   double*  E_interp = new double[3];
   E2 = 0.0;
@@ -1652,13 +1673,13 @@ void MultiGrid::Trace(double* point, int bottomsteps, bool savecharge, double bo
       E_interp[i] = E[i]->DataInterpolate3D(point[0],point[1],point[2]);
       E2 += E_interp[i] * E_interp[i];
     }
-  Emag = max(0.1, sqrt(E2));
+  Emag = max(0.001, sqrt(E2));
   mu = mu_Si(Emag * MICRON_PER_CM, CCDTemperature); // Mobility
   // Thermal Velocity - DiffMultiplier factor greater than 1 as explained in Green, 1990
   vth = sqrt(8.0 * KBOLTZMANN * CCDTemperature / (ME * pi))  * MICRON_PER_M * DiffMultiplier; 
   vth = vth / sqrt((double)NumDiffSteps);
   tau  = ME / QE * mu * METER_PER_CM * METER_PER_CM; // scattering time
-
+  //printf("Emag = %f, mu=%f, vth=%g, tau = %g\n",Emag, mu, vth, tau);
   static int id = 0;
   int phase = 0;
   // Log initial position.
@@ -1675,7 +1696,7 @@ void MultiGrid::Trace(double* point, int bottomsteps, bool savecharge, double bo
 	  E_interp[i] = E[i]->DataInterpolate3D(point[0],point[1],point[2]);
 	  E2 += E_interp[i] * E_interp[i];
 	}
-      Emag = max(0.1, sqrt(E2));
+      Emag = max(0.001, sqrt(E2));
       mu = mu_Si(Emag * MICRON_PER_CM, CCDTemperature); // Mobility
       ve = mu * MICRON_PER_CM * MICRON_PER_CM; // Drift Velocity Factor (Velocity / E)
       phiangle = 2.0 * pi * drand48();
@@ -1716,21 +1737,32 @@ void MultiGrid::Trace(double* point, int bottomsteps, bool savecharge, double bo
 	  i = E[0]->XIndex(point[0]);
 	  j = E[0]->YIndex(point[1]);
 	  k = E[0]->ZIndex(point[2]);
-	  if ((hole[0]->data[i + j * hole[0]->nx + k * hole[0]->nx * hole[0]->ny] > 0.1) && SaturationModel == 1)
+	  if ((hole[0]->data[i + j * hole[0]->nx + k * hole[0]->nx * hole[0]->ny] > 0.01) )
 	    {
-	      break; // Electron recombines if it encounters free holes.
+	      Recombined = - RecombinationLifetime * log(1.0 - drand48());
+	      if (Recombined < Tscatt)
+		{
+		  break; // Electron recombines if it encounters free holes.
+		}
 	    }
-	  /*
+	  
 	  if (savecharge && ElectronMethod != 0)
 	    {
 	      // Find the pixel the charge is in and add 1 electron to it.
 	      int PixX = (int)floor((point[0] - PixelBoundaryLowerLeft[0]) / PixelSizeX);
 	      int PixY = (int)floor((point[1] - PixelBoundaryLowerLeft[1]) / PixelSizeY);
 	      j = PixX + PixelBoundaryNx * PixY;
-	      if (j >= 0 && j < PixelBoundaryNx * PixelBoundaryNy)   CollectedCharge[0][j] += 1;
+	      if (j >= 0 && j < PixelBoundaryNx * PixelBoundaryNy)
+		{
+		  //printf("Logged 1 electron in pixel (%d,%d)\n", PixX, PixY);
+		  CollectedCharge[0][j] += 1;
+		}
 	      phase = 4;
+	      // Log latest position update.
+	      file << setw(8) << id << setw(8) << tracesteps << setw(3) << phase
+		   << setw(15) << point[0] << setw(15) << point[1] << setw(15) << point[2] << endl;
 	      break;
-	      }*/
+	      }
 	  if (i > 0 && i < elec[0]->nx-1 && j > 0 && j < elec[0]->ny-1 && k < elec[0]->nz-1 && savecharge && ElectronMethod == 0)
 	    {
 	      elec[0]->data[i + j * elec[0]->nx + k * elec[0]->nx * elec[0]->ny] += bottomcharge;// Add bottomcharge to this grid cell
@@ -1760,15 +1792,23 @@ void MultiGrid::Trace(double* point, int bottomsteps, bool savecharge, double bo
 
 double MultiGrid::GetElectronInitialZ()
 {
-  // This draws an intitial z value from a pdf given a filter and an SED
-  if(FilterIndex >= 0 && FilterIndex < n_band && CalculateZ0 == 1) {
-        int cdf_index = (int)floor(n_filter_cdf * drand48());
-        return SensorThickness - filter_cdf[FilterIndex * n_filter_cdf + cdf_index];
+  // This draws an intitial z value given a wavelength Lambda
+  double alpha, ConversionDepth = 100.0, BlockingLayerThickness = 4.0;
+  if(CalculateZ0 == 1)
+    {
+      alpha = 102E-4 * sqrt(Lambda / 7.0);
+      while (ConversionDepth > SensorThickness - BlockingLayerThickness)
+	{
+	  ConversionDepth = -1.0 / alpha * log(1.0 - drand48());
+	}
+      return SensorThickness - ConversionDepth;
     }
-    else {
-        return ElectronZ0Fill;
+  else
+    {
+      return ElectronZ0Fill;
     }
 }
+  
 
 void MultiGrid::TraceSpot(int m)
 {
@@ -2952,5 +2992,28 @@ void MultiGrid::SetCharge(Array3D* rho, Array3D* hole, Array3D* elec, Array2DInt
 	  if (VerboseLevel > 2 && i == rho->nx/2 && j == rho->ny/2) printf("In SetCharge. Nz = %d, m = %d, Total = %f, Sum = %f\n",rho->nz, m, Total, Sum);	      
 	}
     }
+  return;
+}
+
+void MultiGrid::UpdateDeltaVs()
+{
+  int i, j, k;
+  printf("In update DeltaVs\n");
+  for (i=0; i<NumberofPixelRegions; i++)
+    for (j=0; j<NewNumberofContactDeltaVs; j++)
+      {
+	// Now if there are any that match DeltaVs which are input, assign the
+	// NewDeltaVs and add the change due to the capacitance
+	NewDeltaV[i][j] = 0.0;
+	for (k=0; k<NumberofContactDeltaVs[i]; k++)
+	  {
+	    //printf("i=%d, j=%d, k=%d, px=%.2f, py=%.2f Newpx=%.2f, Newpy=%.2f\n",i,j,k,DeltaVPixelCoords[i][k][0],DeltaVPixelCoords[i][k][1],NewDeltaVPixelCoords[i][j][0],NewDeltaVPixelCoords[i][j][1]);
+	    if ((fabs(NewDeltaVPixelCoords[i][j][0] - DeltaVPixelCoords[i][k][0]) < 0.1) && (fabs(NewDeltaVPixelCoords[i][j][1] - DeltaVPixelCoords[i][k][1]) < 0.1))
+	      {
+		NewDeltaV[i][j] = DeltaV[i][k];
+	      }
+	  }
+	NewDeltaV[i][j] -= CollectedCharge[i][j] * QE / ContactCapacitance;
+      }
   return;
 }

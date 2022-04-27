@@ -72,7 +72,7 @@ nzmax = nzz
 """
 print("Center")
 for k in range(dat.nz):
-    print(f"k={k}, z={dat.z[k]}, Rho={dat.rho[nxcenter,nycenter,k]}, elec = {dat.Elec[nxcenter,nycenter,k]}, hole = {dat.Hole[nxcenter,nycenter,k]}, Phi={dat.phi[nxcenter,nycenter,k]}")
+    print(f"k={k}, z={dat.z[k]}, Rho={dat.rho[nxcenter,nycenter,k]}, elec = {dat.Elec[nxcenter,nycenter,k]}, hole = {dat.Hole[nxcenter,nycenter,k]}, Phi={dat.phi[nxcenter,nycenter,k]}, Ez={dat.Ez[nxcenter,nycenter,k]}")
 
 print("Between contacts")
 for k in range(dat.nz):
@@ -142,7 +142,9 @@ ax3.contourf(dxx, dyy, plotarray, levels = levels, cmap = my_cmap, extend='both'
 
 plt.savefig(outputfiledir+"/plots/"+outputfilebase+"_Summary_%d.pdf"%run)
 
-
+"""
+# Commenting out the dopant plot.
+# Can always uncomment if needed
 print("Making dopant plot\n")
 
 numzs = 25 # controls how deep the plot goes
@@ -167,3 +169,4 @@ plt.ylabel('$\\rho(x,y,z)$ cm$^3$')
 plt.xlim(0.0,1.0)
 
 plt.savefig(outputfiledir+"/plots/"+outputfilebase+"_ContactDoping_%d.pdf"%run)
+"""

@@ -341,3 +341,50 @@ the Python plotting routines as well.
     6.  Plot Syntax: python Plot_BF_Spots.py data/bfrun/bf.cfg 0
         NumSpots 80 (Assumes this was run NumSpots times with random
         center locations)
+
+NOTES FOR THE USE OF THE JWST_MIRI BRANCH
+
+    0. Note that if you make a new directory with a new .cfg file, the
+        outputfiledir parameter controls where it puts the data. 
+
+    1.  The data/pixel* cfg files are simply for solving Poisson's equation with the given inputs.
+
+    2.  The data/bf_test cfg files add electron tracking:
+    	A. bf_test2/bf.cfg runs 10,000 electrons with all contacts at -2V
+    	B. bf_test3/bf.cfg runs 10,000 electrons with all contacts at -2V
+	    except the center pixel at -2.5V
+	C. These are all at Lambda = 10 microns
+	D. bf_test4/bf.cfg runs 10 steps of 10,000 electrons, adjusting the contact
+	     voltages after each step.
+	E. The NumElec parameter controls how many electrons per step.  This should be
+	     at least 1000, since a smaller number of electrons has a negligible impact on the
+	     contact voltages.
+	F. The NumSteps parameter controls how many steps are done.  It can get to be a
+	    lot of data, so the SaveData and SaveElec parameters control how often the large
+	    files (.hdf5) are saved.  The CC file (the amount of charge collected in each pixel)
+	    and the Pts file (the electron tracking information) are always saved at every step.
+	    Note that the CC file is cumulative, but the Pts file is only the electrons
+	    that were added at that step.
+	G. All of these are run at a lower resolution, ScaleFactor=1, instead of the
+	     ScaleFactor=2 used for the pixel files.  I would keep it here until you think you have it
+	     all debugged, then run a final run at ScaleFactor-2, which of course will take longer.
+	 H. The Lambda parameter controls the depth of where the photoelectrons are generated,
+	      which is only active if CalculateZ0=1. If CalculateZ0=0, then all electrons will
+	      start at ElectronZ0Fill.
+	  I. The ContactCapacitance controls the contact voltage adjustment.  This is in farads.
+	  J. This is currently tracking electrons in a 5x5 grid of pixels.  If you want more
+	      pixels (up to 9x9), adjust the PixelBoundary parameters.  If you want more than
+	      9x9, you need to also increase the PixelRegion parameters and increase Nx and Ny
+	      appropriately.
+	  K.  If you want to turn off diffusion, set DiffMultiplier=0.  If you want to turn off the
+	        per step contact voltage adjustment, set ContactCapacitance=0.  It would be interesting
+		to build up a spot with ContactCapacitance=0 and another one with the correct value
+		The difference should show the BF due to electrostatic effects, but leave what is due
+		to the incomplete depletion.
+
+
+
+
+      
+
+

@@ -1,6 +1,0 @@
-BD1000.dat.gz is clr_neq/T900_g50_d6f0.clr -- norm 1.644809e+00 -- -1.868868e+01 -2.038585e+01 -1.982132e+01 -2.273980e+01 -2.747212e+01 -1.979427e+01
-BD1500.dat.gz is c100_neq/T1600_g50_d4f0.c100 -- norm 7.457299e-01 -- -2.049206e+01 -2.401268e+01 -2.612861e+01 -2.793724e+01 -2.963439e+01 -2.461830e+01
-BD1800.dat.gz is /Users/danielsf/physics/newSedLibrary/starSED/mlt/lte023-5.0+0.5a+0.0.BT-Settl.spec.gz -- norm 7.510319e+15 -- -2.141683e+01 -2.511631e+01 -2.699054e+01 -2.906797e+01 -3.046647e+01 -2.468915e+01
-BD2000.dat.gz is /Users/danielsf/physics/newSedLibrary/starSED/mlt/lte024-5.0+0.5a+0.0.BT-Settl.spec.gz -- norm 1.573746e+16 -- -2.238994e+01 -2.582006e+01 -2.767003e+01 -2.959869e+01 -3.102261e+01 -2.549234e+01
-BD325.dat.gz is /Users/danielsf/physics/newSedLibrary/starSED/mlt/lte004.5-4.5-0.0a+0.0.BT-Settl.spec.gz -- norm 9.447593e+08 -- 7.016563e-01 -6.711034e+00 -1.317618e+01 -1.660201e+01 -1.993198e+01 -7.438303e+00
-BD555.dat.gz is c100_neq/T700_g55_d2f2.c100 -- norm 2.486373e-01 -- -1.363665e+01 -1.512493e+01 -1.570686e+01 -1.863722e+01 -2.364955e+01 -1.415283e+01

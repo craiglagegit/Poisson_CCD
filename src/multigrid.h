@@ -104,7 +104,7 @@ class MultiGrid
   double* ContactDose;		// Contact doping
   double* ContactSigma;		// Contact depth in microns
   double* ContactPeak;           // Depth of peak of contact implant below silicon surface in microns
-
+  double ContactCapacitance;  // Used for calculating deltaV due to stored electrons.
   double BottomOxide;             // Bottom oxide thickness in microns
 
   // Pixel Regions
@@ -112,9 +112,12 @@ class MultiGrid
   double** PixelRegionLowerLeft;	  //
   double** PixelRegionUpperRight;	  //
   int* NumberofContactDeltaVs;		  //
- double*** DeltaVPixelCoords;            // (x,y) coords of pixel center
+  double*** DeltaVPixelCoords;            // (x,y) coords of pixel center
   double** DeltaV;                 // Voltage deviation in contact region
-
+  int NewNumberofContactDeltaVs;		  //
+  double*** NewDeltaVPixelCoords;            // (x,y) coords of pixel center
+  double** NewDeltaV;                 // Voltage deviation in contact region
+  int** CollectedCharge;		  // Collected charge in e-
   // Constant Voltage Regions
   int NumberofFixedRegions;
   double** FixedRegionLowerLeft;
@@ -142,11 +145,13 @@ class MultiGrid
   int PixelBoundaryNy;
   int NumVertices;
   int CalculateZ0;
+  double Lambda;
   double ElectronZ0Fill;
   double ElectronZ0Area;  
   double CCDTemperature;
   double DiffMultiplier;
   double TopAbsorptionProb;
+  double RecombinationLifetime; 
   int NumDiffSteps;
   int EquilibrateSteps;
   int BottomSteps;
@@ -178,12 +183,6 @@ class MultiGrid
   int Continuation;
   int LastContinuationStep;  
 
-  // Wavelength info
-  string FilterBand;    // One of "u", "g", "r", "i", "z", "y".
-  int FilterIndex;      // 0=u, 1=g, 2=r, 3=i, 4=z, 5=y
-  string FilterFile;    // location of tabulated per-band depth probabilities
-  static const int n_band = 6, n_filter_cdf = 5000;
-  double filter_cdf[n_band * n_filter_cdf];
   
   // Methods
   void ReadConfigurationFile(string);
@@ -213,6 +212,7 @@ class MultiGrid
   double mu_Si (double, double);
   void Set_QFh(Array2D**);
   //void Set_QFe(Array2D**);
+  void UpdateDeltaVs();
   void WriteCollectedCharge(string, string, string);  
   void ReadQFeLookup(string, string, string);
   void Setkmins(Array3D**, Array2DInt**, Array2DInt**);
