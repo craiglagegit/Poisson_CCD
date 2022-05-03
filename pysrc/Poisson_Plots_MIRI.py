@@ -76,11 +76,11 @@ for k in range(dat.nz):
 
 print("Between contacts")
 for k in range(dat.nz):
-    print(f"k={k}, z={dat.z[k]}, Rho={dat.rho[nxcenter,nycenter3,k]}, elec = {dat.Elec[nxcenter,nycenter3,k]}, hole = {dat.Hole[nxcenter,nycenter3,k]}, Phi={dat.phi[nxcenter,nycenter3,k]}")
+    print(f"k={k}, z={dat.z[k]}, Rho={dat.rho[nxcenter,nycenter2,k]}, elec = {dat.Elec[nxcenter,nycenter2,k]}, hole = {dat.Hole[nxcenter,nycenter2,k]}, Phi={dat.phi[nxcenter,nycenter2,k]}")
 
-print("Corner")
+print("Next Pixel")
 for k in range(dat.nz):
-    print(f"k={k}, z={dat.z[k]}, Rho={dat.rho[nxcenter3,nycenter3,k]}, elec = {dat.Elec[nxcenter3,nycenter3,k]}, hole = {dat.Hole[nxcenter3,nycenter3,k]}, Phi={dat.phi[nxcenter3,nycenter3,k]}")
+    print(f"k={k}, z={dat.z[k]}, Rho={dat.rho[nxcenter,nycenter3,k]}, elec = {dat.Elec[nxcenter,nycenter3,k]}, hole = {dat.Hole[nxcenter,nycenter3,k]}, Phi={dat.phi[nxcenter,nycenter3,k]}")
 """
 
 

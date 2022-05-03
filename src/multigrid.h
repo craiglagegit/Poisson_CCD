@@ -134,6 +134,8 @@ class MultiGrid
   int LogEField;
   int LogPixelPaths;
   int PixelAreas;
+  int RecombinationCounter;
+  int MaxStepsCounter;
   double* PixelBoundaryLowerLeft;
   double* PixelBoundaryUpperRight;
   double* PixelBoundaryStepSize;
@@ -153,8 +155,6 @@ class MultiGrid
   double TopAbsorptionProb;
   double RecombinationLifetime; 
   int NumDiffSteps;
-  int EquilibrateSteps;
-  int BottomSteps;
   int SaturationModel;
   int NumElec;
   int NumSteps;
@@ -200,7 +200,7 @@ class MultiGrid
   void ReadOutputFile(string, string, string, Array3D*);
   void Gradient(Array3D*, Array3D**);
   double GetElectronInitialZ();
-  void Trace(double*, int, bool, double, ofstream&);
+  void Trace(double*, ofstream&);
   void TraceSpot(int);
   void TraceList(int);        
   void TraceGrid(int);

@@ -457,7 +457,11 @@ void MultiGrid::ReadConfigurationFile(string inname)
   // Voltages and Charges
   Vbb = GetDoubleParam(inname, "Vbb", -4.0, VerboseLevel);		        // Back bias
   Vcontact = GetDoubleParam(inname, "Vcontact", -2.0, VerboseLevel);	// Contact voltage
-  ContactCapacitance = GetDoubleParam(inname, "ContactCapacitance", 0.0, VerboseLevel);	// Contact capacitance
+  ContactCapacitance = GetDoubleParam(inname, "ContactCapacitance", 34.0E-15, VerboseLevel);	// Contact capacitance
+  if (ContactCapacitance < 1.0E-17 )
+    {
+      printf("Non-physical value of contact capacitance.  Quitting.\n");
+    }
   BottomOxide = GetDoubleParam(inname, "BottomOxide", 0.15, VerboseLevel);
   BackgroundDoping = GetDoubleParam(inname, "BackgroundDoping", -1.0E12, VerboseLevel);
   TopSurfaceDoping = GetDoubleParam(inname, "TopSurfaceDoping", -1.0E12, VerboseLevel);
@@ -517,8 +521,6 @@ void MultiGrid::ReadConfigurationFile(string inname)
   RecombinationLifetime = GetDoubleParam(inname, "RecombinationLifetime", 1.0E-11, VerboseLevel);  
   SaturationModel = GetIntParam(inname, "SaturationModel", 0, VerboseLevel);
   NumDiffSteps = GetIntParam(inname, "NumDiffSteps", 1, VerboseLevel);
-  EquilibrateSteps = GetIntParam(inname, "EquilibrateSteps", 100, VerboseLevel);
-  BottomSteps = GetIntParam(inname, "BottomSteps", 1000, VerboseLevel);
   NumVertices = GetIntParam(inname,"NumVertices",2, VerboseLevel);
   CalculateZ0 = GetIntParam(inname,"CalculateZ0",0, VerboseLevel);
   ElectronZ0Fill = GetDoubleParam(inname,"ElectronZ0Fill",100.0, VerboseLevel);
@@ -1094,7 +1096,7 @@ double MultiGrid::SOR_Inner(Array3D* phi, Array3D* rho, Array3D* elec, Array3D* 
 		      Term1 = omw * phi->data[ind] + w6 * (phi->data[indmx] + phi->data[indpx] + phi->data[indmy] + phi->data[indpy] + phi->zminus[k] * phi->data[indmz] + phi->zplus[k] * phi->data[indpz] + hsquared * rho->data[ind]);
 		      if (isnan(Term1))
 			{
-			  printf("omw=%f, w6=%f, phi->data[ind]=%f,phi->zminus[k]=%f, rho->data[ind]=%f\n",omw,w6,phi->data[ind],phi->zminus[k],rho->data[ind]);
+			  printf("In SOR_Inner.  omw=%f, w6=%f, phi->data[ind]=%f,phi->zminus[k]=%f, rho->data[ind]=%f\n",omw,w6,phi->data[ind],phi->zminus[k],rho->data[ind]);
 			  printf("phi->data[indmx]=%f,phi->data[indmy]=%f,phi->data[indmz]=%f,phi->data[indpx]=%f,phi->data[indpy]=%f,phi->data[indpz]=%f\n",phi->data[indmx],phi->data[indmy],phi->data[indmz],phi->data[indpx],phi->data[indpy],phi->data[indpz]);
 			  exit(0);
 			}
@@ -1643,28 +1645,21 @@ void MultiGrid::Gradient(Array3D* phi, Array3D** E)
   return;
 }
 
-void MultiGrid::Trace(double* point, int bottomsteps, bool savecharge, double bottomcharge, ofstream& file)
+void MultiGrid::Trace(double* point, ofstream& file)
 {
   // This traces an electron down to the bottom, saving path info if requested
   // Diffusion has now been added. This version recalculates mu at each point.
-  // And iterates bottomsteps steps after reaching the bottom.
-  // If savecharge is true, it finds and stores the self-consistent charge locations
-  // If ElectronMethod=0, it will save bottomcharge in each location for bottomsteps steps.
-  // If ElectronMethod=1 or 2, it will only determine the pixel and rely on QFe to determine the charge location.
   // id is a unique integer identifier for each electron that we track.
   // phase encodes the tracking phase and is recorded to the Pts file when LogPixelPaths != 0.
   // 0 - initial position.
   // 1 - endpoint of a step through the bulk.
-  // 2 - just reached bottom and settling to equilibrium.
-  // 3 - equilibrium motion at the bottom, logging charge.
   // 4 - final position.
 
   int i, j, k, tracesteps = 0, tracestepsmax = 10000;
-  bool ReachedBottom = false;
   double mu, E2, Emag, ve, vth, tau, Tscatt, Recombined;
   double theta, phiangle, zmin, zmax, zbottom;
   zmax = SensorThickness;
-  zmin = ContactSigma[0];
+  zmin = ContactSigma[0] * 3.0;
   zbottom = 0.0;
   double*  E_interp = new double[3];
   E2 = 0.0;
@@ -1716,57 +1711,35 @@ void MultiGrid::Trace(double* point, int bottomsteps, bool savecharge, double bo
 	      break;
 	    }
 	}
-      if (point[2] < zmin && !ReachedBottom)
+      i = E[0]->XIndex(point[0]);
+      j = E[0]->YIndex(point[1]);
+      k = E[0]->ZIndex(point[2]);
+      
+      if ((hole[0]->data[i + j * hole[0]->nx + k * hole[0]->nx * hole[0]->ny] > 0.01) )
 	{
-	  ReachedBottom = true;
-	  tracestepsmax = tracesteps + bottomsteps + EquilibrateSteps;
-	  phase = 2;
-	  // After reaching bottom, iterate bottomsteps+EquilibrateSteps more steps.
-	  // The first EquilibrateSteps steps are to let it settle to an
-	  // equilibrium location, then we start logging the charge location
+	  Recombined = - RecombinationLifetime * log(1.0 - drand48());
+	  if (Recombined < Tscatt)
+	    {
+	      RecombinationCounter += 1;
+	      break; // Electron recombines if it encounters free holes.
+	    }
 	}
-      if (ReachedBottom && tracesteps > tracestepsmax - bottomsteps)
+      if (point[2] < zmin)
 	{
-	  //  Start logging location after EquilibrateSteps.
-	  phase = (tracesteps < tracestepsmax) ? 3 : 4;
-	  if (point[2] <= zbottom && SaturationModel == 1)
+	  // Find the pixel the charge is in and add 1 electron to it.
+	  int PixX = (int)floor((point[0] - PixelBoundaryLowerLeft[0]) / PixelSizeX);
+	  int PixY = (int)floor((point[1] - PixelBoundaryLowerLeft[1]) / PixelSizeY);
+	  j = PixX + PixelBoundaryNx * PixY;
+	  if (j >= 0 && j < PixelBoundaryNx * PixelBoundaryNy)
 	    {
-	      break; // Electron recombines and is lost if it reaches the gate oxide
+	      //printf("Logged 1 electron in pixel (%d,%d)\n", PixX, PixY);
+	      CollectedCharge[0][j] += 1;
 	    }
-	  point[2] = max(zbottom, point[2]);
-	  i = E[0]->XIndex(point[0]);
-	  j = E[0]->YIndex(point[1]);
-	  k = E[0]->ZIndex(point[2]);
-	  if ((hole[0]->data[i + j * hole[0]->nx + k * hole[0]->nx * hole[0]->ny] > 0.01) )
-	    {
-	      Recombined = - RecombinationLifetime * log(1.0 - drand48());
-	      if (Recombined < Tscatt)
-		{
-		  break; // Electron recombines if it encounters free holes.
-		}
-	    }
-	  
-	  if (savecharge && ElectronMethod != 0)
-	    {
-	      // Find the pixel the charge is in and add 1 electron to it.
-	      int PixX = (int)floor((point[0] - PixelBoundaryLowerLeft[0]) / PixelSizeX);
-	      int PixY = (int)floor((point[1] - PixelBoundaryLowerLeft[1]) / PixelSizeY);
-	      j = PixX + PixelBoundaryNx * PixY;
-	      if (j >= 0 && j < PixelBoundaryNx * PixelBoundaryNy)
-		{
-		  //printf("Logged 1 electron in pixel (%d,%d)\n", PixX, PixY);
-		  CollectedCharge[0][j] += 1;
-		}
-	      phase = 4;
-	      // Log latest position update.
-	      file << setw(8) << id << setw(8) << tracesteps << setw(3) << phase
-		   << setw(15) << point[0] << setw(15) << point[1] << setw(15) << point[2] << endl;
-	      break;
-	      }
-	  if (i > 0 && i < elec[0]->nx-1 && j > 0 && j < elec[0]->ny-1 && k < elec[0]->nz-1 && savecharge && ElectronMethod == 0)
-	    {
-	      elec[0]->data[i + j * elec[0]->nx + k * elec[0]->nx * elec[0]->ny] += bottomcharge;// Add bottomcharge to this grid cell
-	    }
+	  phase = 4;
+	  // Log latest position update.
+	  file << setw(8) << id << setw(8) << tracesteps << setw(3) << phase
+	       << setw(15) << point[0] << setw(15) << point[1] << setw(15) << point[2] << endl;
+	  break;
 	}
       if(LogPixelPaths == 1) 
       {
@@ -1777,7 +1750,10 @@ void MultiGrid::Trace(double* point, int bottomsteps, bool savecharge, double bo
     point[2] = max(zbottom, point[2]);
     }
   delete[] E_interp;
-  
+  if  (tracesteps == tracestepsmax)
+    {
+      MaxStepsCounter += 1;
+    }
   if(LogPixelPaths == 0) 
     {
       // Log final position
@@ -1815,7 +1791,6 @@ void MultiGrid::TraceSpot(int m)
   // This builds up a Gaussian spot with given center (Xoffset, Yoffset) and SigmaX and SigmaY
   double x, y, z, rsq, v1, v2, fac, xcenter, ycenter;
   int n;
-  double bottomcharge = 1.0 / (double)BottomSteps;
   double* point = new double[3];
   string underscore = "_", slash = "/", name = "Pts";
   string StepNum = std::to_string(m);
@@ -1845,6 +1820,9 @@ void MultiGrid::TraceSpot(int m)
 
   xcenter = (PixelBoundaryUpperRight[0] + PixelBoundaryLowerLeft[0]) / 2.0 + Xoffset;
   ycenter = (PixelBoundaryUpperRight[1] + PixelBoundaryLowerLeft[1]) / 2.0 + Yoffset;
+  RecombinationCounter = 0;
+  MaxStepsCounter = 0;
+
   for (n=0; n<NumElec; n++)
     {
       //  Use Box-Muller algorithm to generate two Gaussian random numbers
@@ -1862,8 +1840,9 @@ void MultiGrid::TraceSpot(int m)
       point[1] = y;
       z = GetElectronInitialZ();
       point[2] = z;
-      Trace(point, BottomSteps, true, bottomcharge, file);
+      Trace(point, file);
     }
+  printf("In TraceSpot.  %d electrons recombined, %d electrons hit maxStep limit\n",RecombinationCounter, MaxStepsCounter);
   file.close();
   printf("Finished writing grid file - %s\n",filename.c_str());
   fflush(stdout);
@@ -2173,7 +2152,6 @@ void MultiGrid::TraceList(int m)
   double x, y, z, zbottom, xcenter, ycenter, abs_length, path_length;
   zbottom = 0.0;
   int n, nlist;
-  double bottomcharge = 1.0 / (double)BottomSteps;
   double* point = new double[3];
   string underscore = "_", slash = "/", name = "Pts";
   string StepNum = std::to_string(m);
@@ -2227,7 +2205,7 @@ void MultiGrid::TraceList(int m)
       point[0] = x;
       point[1] = y;
       point[2] = z;
-      Trace(point, BottomSteps, true, bottomcharge, file);
+      Trace(point, file);
     }
   file.close();
   printf("Finished writing grid file - %s\n",filename.c_str());
@@ -2278,7 +2256,7 @@ void MultiGrid::TraceGrid(int m)
 	  point[1] = y;
 	  z = GetElectronInitialZ();
 	  point[2] = z;
-	  Trace(point, 100, false, 0.0, file);
+	  Trace(point, file);
 	  y += PixelBoundaryStepSize[1];
 	}
       x += PixelBoundaryStepSize[0];
@@ -2325,7 +2303,6 @@ void MultiGrid::TraceRegion(int m)
 	}
     }
   // Initialize for PixelBoundaryTestType == 4 mode.
-  double bottomcharge = 1.0 / (double)BottomSteps;
   double x_center = 0.5 * (PixelBoundaryLowerLeft[0] + PixelBoundaryUpperRight[0]);
   double y_center = 0.5 * (PixelBoundaryLowerLeft[1] + PixelBoundaryUpperRight[1]);
 
@@ -2350,11 +2327,11 @@ void MultiGrid::TraceRegion(int m)
       point[2] = z;
       if(PixelBoundaryTestType == 4) {
           // Accumulate charge, the same as TraceSpot().
-          Trace(point, BottomSteps, true, bottomcharge, file);
+          Trace(point, file);
       }
       else {
           // Do not accumulate charge, for backwards compatibility.
-          Trace(point, 100, false, 0.0, file);
+          Trace(point, file);
       }
     }
   file.close();
@@ -2393,7 +2370,7 @@ void MultiGrid::FindEdge(double* point, double theta, ofstream& file)
       point[0] = x;
       point[1] = y;
       point[2] = z0;
-      Trace(point, 100, false, 0.0, file);
+      Trace(point, file);
       newpixx = (int)floor((point[0] - PixelBoundaryLowerLeft[0]) / PixelSizeX);
       newpixy = (int)floor((point[1] - PixelBoundaryLowerLeft[1]) / PixelSizeY);
       if (VerboseLevel > 2) printf("Finding edge, newpixx = %d, newpixy = %d, theta = %.3f, %d steps, x = %.3f, y = %.3f\n",newpixx, newpixy, theta, edgesteps,point[0],point[1]);
@@ -2998,7 +2975,7 @@ void MultiGrid::SetCharge(Array3D* rho, Array3D* hole, Array3D* elec, Array2DInt
 void MultiGrid::UpdateDeltaVs()
 {
   int i, j, k;
-  printf("In update DeltaVs\n");
+  //printf("In update DeltaVs\n");
   for (i=0; i<NumberofPixelRegions; i++)
     for (j=0; j<NewNumberofContactDeltaVs; j++)
       {

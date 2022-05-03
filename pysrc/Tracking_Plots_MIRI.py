@@ -104,9 +104,6 @@ for i, line in enumerate(lines):
     items = line.split()
     CC_array[int(items[0]), int(items[1])] = items[2]
 
-TotalElectrons = CC_array.sum()
-LostElectrons = NumElec * (run + 1) - TotalElectrons
-print("A total of %d electrons were collected, so %d electrons recombined"%(TotalElectrons,LostElectrons))    
 img1 = plt.imshow(CC_array, interpolation='nearest')
 colorbar(img1)    
     
@@ -133,15 +130,27 @@ blacksy=[]
 plottedxin = -1000.0
 plottedyin = -1000.0
 lines.remove(lines[0])
+
+startCount = 0
+finishCount = 0
+phaseZeroFound = False
 for line in lines:
     values = line.split()
     phase = int(values[2])
     if phase == 0:
         xin = float(values[3])
         yin = float(values[4])
+        startCount += 1
+        #if phaseZeroFound:
+        #    print(f"Found phase 0 but no phase4, id={int(values[0]) - 1}")
+
+        phaseZeroFound = True
     elif phase == 4:
         xout = float(values[3])
         yout = float(values[4])
+        finishCount += 1
+        phaseZeroFound = False
+        #print(f"Found phase 4, id={int(values[0])}")        
         if np.isnan(xout) or np.isnan(yout):
             print("xin = %.3f, yin = %.3f is a nan")
             continue
@@ -157,6 +166,9 @@ for line in lines:
     else:
         continue
 
+TotalElectrons = finishCount
+LostElectrons = startCount - finishCount
+print("A total of %d electrons were collected, so %d electrons were lost"%(TotalElectrons,LostElectrons))        
 plt.subplot(1,1,1,aspect=1)
 plt.title("Pixel Boundaries",fontsize = 12)
 if ConfigData["PixelBoundaryTestType"] == 0:
