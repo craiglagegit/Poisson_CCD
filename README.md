@@ -377,8 +377,9 @@ NOTES FOR THE USE OF THE JWST_MIRI BRANCH
 	      9x9, you need to also increase the PixelRegion parameters and increase Nx and Ny
 	      appropriately.
 	  K.  If you want to turn off diffusion, set DiffMultiplier=0.  If you want to turn off the
-	        per step contact voltage adjustment, set ContactCapacitance=0.  It would be interesting
-		to build up a spot with ContactCapacitance=0 and another one with the correct value
+	        per step contact voltage adjustment, set ContactCapacitance to a large value (1.0E6
+		for example).  It would be interesting to build up a spot with
+		ContactCapacitance=1.0E6 and another one with the correct value
 		The difference should show the BF due to electrostatic effects, but leave what is due
 		to the incomplete depletion.
 
