@@ -200,7 +200,7 @@ class MultiGrid
   void ReadOutputFile(string, string, string, Array3D*);
   void Gradient(Array3D*, Array3D**);
   double GetElectronInitialZ();
-  void Trace(double*, ofstream&);
+  void Trace(double*, bool, ofstream&);
   void TraceSpot(int);
   void TraceList(int);        
   void TraceGrid(int);

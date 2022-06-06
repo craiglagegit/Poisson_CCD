@@ -1645,7 +1645,7 @@ void MultiGrid::Gradient(Array3D* phi, Array3D** E)
   return;
 }
 
-void MultiGrid::Trace(double* point, ofstream& file)
+void MultiGrid::Trace(double* point, bool savecharge, ofstream& file)
 {
   // This traces an electron down to the bottom, saving path info if requested
   // Diffusion has now been added. This version recalculates mu at each point.
@@ -1724,7 +1724,7 @@ void MultiGrid::Trace(double* point, ofstream& file)
 	      break; // Electron recombines if it encounters free holes.
 	    }
 	}
-      if (point[2] < zmin)
+      if (savecharge && point[2] < zmin)
 	{
 	  // Find the pixel the charge is in and add 1 electron to it.
 	  int PixX = (int)floor((point[0] - PixelBoundaryLowerLeft[0]) / PixelSizeX);
@@ -1840,7 +1840,7 @@ void MultiGrid::TraceSpot(int m)
       point[1] = y;
       z = GetElectronInitialZ();
       point[2] = z;
-      Trace(point, file);
+      Trace(point, true, file);
     }
   printf("In TraceSpot.  %d electrons recombined, %d electrons hit maxStep limit\n",RecombinationCounter, MaxStepsCounter);
   file.close();
@@ -2205,7 +2205,7 @@ void MultiGrid::TraceList(int m)
       point[0] = x;
       point[1] = y;
       point[2] = z;
-      Trace(point, file);
+      Trace(point, true, file);
     }
   file.close();
   printf("Finished writing grid file - %s\n",filename.c_str());
@@ -2256,7 +2256,7 @@ void MultiGrid::TraceGrid(int m)
 	  point[1] = y;
 	  z = GetElectronInitialZ();
 	  point[2] = z;
-	  Trace(point, file);
+	  Trace(point, false, file);
 	  y += PixelBoundaryStepSize[1];
 	}
       x += PixelBoundaryStepSize[0];
@@ -2327,11 +2327,11 @@ void MultiGrid::TraceRegion(int m)
       point[2] = z;
       if(PixelBoundaryTestType == 4) {
           // Accumulate charge, the same as TraceSpot().
-          Trace(point, file);
+	Trace(point, true, file);
       }
       else {
           // Do not accumulate charge, for backwards compatibility.
-          Trace(point, file);
+	Trace(point, false, file);
       }
     }
   file.close();
@@ -2370,7 +2370,7 @@ void MultiGrid::FindEdge(double* point, double theta, ofstream& file)
       point[0] = x;
       point[1] = y;
       point[2] = z0;
-      Trace(point, file);
+      Trace(point, false, file);
       newpixx = (int)floor((point[0] - PixelBoundaryLowerLeft[0]) / PixelSizeX);
       newpixy = (int)floor((point[1] - PixelBoundaryLowerLeft[1]) / PixelSizeY);
       if (VerboseLevel > 2) printf("Finding edge, newpixx = %d, newpixy = %d, theta = %.3f, %d steps, x = %.3f, y = %.3f\n",newpixx, newpixy, theta, edgesteps,point[0],point[1]);
