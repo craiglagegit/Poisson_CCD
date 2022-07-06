@@ -1656,10 +1656,13 @@ void MultiGrid::Trace(double* point, bool savecharge, ofstream& file)
   // 4 - final position.
 
   int i, j, k, tracesteps = 0, tracestepsmax = 10000;
+  int PixX, PixY;
   double mu, E2, Emag, ve, vth, tau, Tscatt, Recombined;
-  double theta, phiangle, zmin, zmax, zbottom;
+  double theta, phiangle, zmin_contact, zmin_between, zmax, zbottom;
+  double PixXmin, PixYmin, ContactXmin, ContactXmax, ContactYmin, ContactYmax;
   zmax = SensorThickness;
-  zmin = ContactSigma[0] * 3.0;
+  zmin_contact = ContactSigma[0] * 3.0;
+  zmin_between = 0.1;
   zbottom = 0.0;
   double*  E_interp = new double[3];
   E2 = 0.0;
@@ -1724,22 +1727,37 @@ void MultiGrid::Trace(double* point, bool savecharge, ofstream& file)
 	      break; // Electron recombines if it encounters free holes.
 	    }
 	}
-      if (savecharge && point[2] < zmin)
+      if (point[2] < zmin_contact)
 	{
-	  // Find the pixel the charge is in and add 1 electron to it.
-	  int PixX = (int)floor((point[0] - PixelBoundaryLowerLeft[0]) / PixelSizeX);
-	  int PixY = (int)floor((point[1] - PixelBoundaryLowerLeft[1]) / PixelSizeY);
-	  j = PixX + PixelBoundaryNx * PixY;
-	  if (j >= 0 && j < PixelBoundaryNx * PixelBoundaryNy)
+	  // Adjust zmin depending on position in the array.
+	  // Force it to go further if it is between the contacts
+	  // Only do this calculation close to the bottom
+	  PixX = (int)floor((point[0] - PixelBoundaryLowerLeft[0]) / PixelSizeX);
+	  PixXmin = PixelBoundaryLowerLeft[0] + (double)PixX * PixelSizeX;
+	  ContactXmin = PixXmin + (PixelSizeX - ContactWidth) / 2.0;
+	  ContactXmax = ContactXmin + ContactWidth;
+	  PixY = (int)floor((point[1] - PixelBoundaryLowerLeft[1]) / PixelSizeY);
+	  PixYmin = PixelBoundaryLowerLeft[1] + (double)PixY * PixelSizeY;
+	  ContactYmin = PixYmin + (PixelSizeY - ContactHeight) / 2.0;
+	  ContactYmax = ContactYmin + ContactHeight;
+	  if ((point[0] >= ContactXmin && point[0] <= ContactXmax && point[1] >= ContactYmin && point[1] <= ContactYmax) || (point[2] < zmin_between))
 	    {
-	      //printf("Logged 1 electron in pixel (%d,%d)\n", PixX, PixY);
-	      CollectedCharge[0][j] += 1;
+	      if (savecharge)
+		{
+		  // Find the pixel the charge is in and add 1 electron to it.
+		  j = PixX + PixelBoundaryNx * PixY;
+		  if (j >= 0 && j < PixelBoundaryNx * PixelBoundaryNy)
+		    {
+		      //printf("Logged 1 electron in pixel (%d,%d)\n", PixX, PixY);
+		      CollectedCharge[0][j] += 1;
+		    }
+		}
+	      phase = 4;      
+	      // Log latest position update.
+	      file << setw(8) << id << setw(8) << tracesteps << setw(3) << phase
+		   << setw(15) << point[0] << setw(15) << point[1] << setw(15) << point[2] << endl;
+	      break;
 	    }
-	  phase = 4;
-	  // Log latest position update.
-	  file << setw(8) << id << setw(8) << tracesteps << setw(3) << phase
-	       << setw(15) << point[0] << setw(15) << point[1] << setw(15) << point[2] << endl;
-	  break;
 	}
       if(LogPixelPaths == 1) 
       {
