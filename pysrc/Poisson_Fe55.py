@@ -24,11 +24,59 @@ outputfiledir = ConfigData["outputfiledir"]
 NumElec = ConfigData["NumElec"]
 PixelSizeX = ConfigData["PixelSizeX"]
 PixelSizeY = ConfigData["PixelSizeY"]
+outputfilebase = ConfigData["outputfilebase"]
+outputfiledir = ConfigData["outputfiledir"]
+ScaleFactor = ConfigData["ScaleFactor"]
+GridsPerPixelX = ConfigData["GridsPerPixelX"]
+GridsPerPixelY = ConfigData["GridsPerPixelY"]
 
+# This holds all of the data
+dat = Array3dHDF5(outputfiledir, outputfilebase, run)
+
+nxx = dat.nx - 1
+nyy = dat.ny - 1
+nzz = dat.nz
+
+print(nxx, nyy, nzz)
+
+nxcenter = int(nxx/2)
+nycenter = int(nyy/2)
+nxcenter3 = nxcenter + 2 * GridsPerPixelX*ScaleFactor
 # Create the output directory if it doesn't exist
 if not os.path.isdir(outputfiledir+"/plots"):
     os.mkdir(outputfiledir+"/plots")
 
+print("Making 1D potential and Charge Density plots\n")
+plt.figure()
+
+plt.suptitle("1D Potential and Charge Density Slices. Grid = %d*%d*%d."%(nxx,nyy,nzz),fontsize = 12)
+plt.subplots_adjust(hspace=0.3, wspace=0.6)
+phinumzs = nzz
+print(phinumzs)
+numzs = nzz
+"""
+for ii in range(phinumzs):
+    print(ii, dat.z[ii], dat.phi[nxcenter, nycenter, ii], dat.rho[nxcenter, nycenter, ii], dat.phi[nxcenter3, nycenter, ii], dat.rho[nxcenter3, nycenter, ii])
+"""
+plt.subplot(1,2,1)
+plt.title("Phi-Collect Gate", fontsize=12)
+plt.plot(dat.z[0:phinumzs],dat.phi[nxcenter,nycenter,0:phinumzs])
+
+plt.ylabel('$\phi(x,y,z)$ [V]',fontsize=12)
+plt.xlabel('Z (microns)')
+plt.ylim(0.0, 100.0)
+plt.xlim(0.0,100.0)
+
+plt.subplot(1,2,2)
+plt.title("Rho-Collect Gate", fontsize=12)
+plt.plot(dat.z[0:numzs], dat.rho[nxcenter,nycenter,0:numzs], label = "Fixed charge", color='green')
+plt.ylabel('Charge density (code units)',fontsize=12)
+plt.xlabel('Z (microns)')
+plt.savefig(outputfiledir+"/plots/"+outputfilebase+"_1D_Potentials_%d.pdf"%run)
+
+
+
+    
 filename = outputfiledir+"/"+outputfilebase+'_'+str(run)+"_Pts.dat"
 file = open(filename,"r")
 lines = file.readlines()
@@ -53,7 +101,7 @@ if ConfigData["LogPixelPaths"] != 0 and run % ConfigData["LogPixelPaths"] == 0:
     vertical_zoom = 0.5
     plt.figure()
     plt.suptitle("Fe55 Path Plot - Vertical Zoom = %.1f"%vertical_zoom, fontsize = 24)
-    plt.subplots_adjust(wspace=0.2)
+    plt.subplots_adjust(wspace=0.4)
 
     for line in lines:
         values = line.split()
@@ -102,7 +150,7 @@ if ConfigData["LogPixelPaths"] != 0 and run % ConfigData["LogPixelPaths"] == 0:
     print("Making array hole path plots\n")
     # Plotting the paths along a line through the center
 
-    NumSteps = 2000
+    NumSteps = 20000
     xpaths = np.zeros([NumElec, NumSteps])
     zxpaths = np.zeros([NumElec, NumSteps])
     ypaths = np.zeros([NumElec, NumSteps])
@@ -129,7 +177,7 @@ if ConfigData["LogPixelPaths"] != 0 and run % ConfigData["LogPixelPaths"] == 0:
         maxsteps[id] = step
     fh_counter = 1
     for id in range(0, NumElec, skip):
-        if maxsteps[id] == 1999:
+        if maxsteps[id] == 19999:
             fh_counter += 1
         else:
             plt.subplot(1,2,1,aspect=vertical_zoom)

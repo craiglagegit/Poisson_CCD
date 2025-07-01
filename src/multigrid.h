@@ -180,7 +180,8 @@ class MultiGrid
   double Fe55CloudRadius;
   double Fe55ElectronMult;
   double Fe55HoleMult;
-
+  double Fe55PenetrationDepth;
+  
   int PixelBoundaryNx;
   int PixelBoundaryNy;
   int NumVertices;

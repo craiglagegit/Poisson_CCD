@@ -612,7 +612,7 @@ void MultiGrid::ReadConfigurationFile(string inname)
   ChannelProfile = GetIntParam(inname, "ChannelProfile", 0, VerboseLevel);
   if (ChannelProfile == 0)
     {
-      ChannelDoping = GetDoubleParam(inname, "ChannelDoping", 5.0E11, VerboseLevel);
+      ChannelDoping = GetDoubleParam(inname, "ChannelDoping", 0.0, VerboseLevel);
       ChannelDepth = GetDoubleParam(inname, "ChannelDepth", 1.0, VerboseLevel);
     }
   else
@@ -623,7 +623,7 @@ void MultiGrid::ReadConfigurationFile(string inname)
       for (i=0; i<ChannelProfile; i++)
 	{
 	  profilenum = std::to_string(i);
-	  ChannelDose[i] = GetDoubleParam(inname, "ChannelDose_"+profilenum, 5.0E11, VerboseLevel);
+	  ChannelDose[i] = GetDoubleParam(inname, "ChannelDose_"+profilenum, 0.0, VerboseLevel);
 	  ChannelSigma[i] = GetDoubleParam(inname, "ChannelSigma_"+profilenum, 0.5, VerboseLevel);
 	  ChannelPeak[i] = GetDoubleParam(inname, "ChannelPeak_"+profilenum, 0.0, VerboseLevel);	  
 	}
@@ -631,7 +631,7 @@ void MultiGrid::ReadConfigurationFile(string inname)
   ChannelStopProfile = GetIntParam(inname, "ChannelStopProfile", 0, VerboseLevel);
   if (ChannelStopProfile == 0)
     {
-      ChannelStopDoping = GetDoubleParam(inname, "ChannelStopDoping", 5.0E11, VerboseLevel);
+      ChannelStopDoping = GetDoubleParam(inname, "ChannelStopDoping", 0.0, VerboseLevel);
       ChannelStopDepth = GetDoubleParam(inname, "ChannelStopDepth", 1.0, VerboseLevel);
     }
   else
@@ -642,7 +642,7 @@ void MultiGrid::ReadConfigurationFile(string inname)
       for (i=0; i<ChannelStopProfile; i++)
 	{
 	  profilenum = std::to_string(i);
-	  ChannelStopDose[i] = GetDoubleParam(inname, "ChannelStopDose_"+profilenum, 5.0E11, VerboseLevel);
+	  ChannelStopDose[i] = GetDoubleParam(inname, "ChannelStopDose_"+profilenum, 0.0, VerboseLevel);
 	  ChannelStopSigma[i] = GetDoubleParam(inname, "ChannelStopSigma_"+profilenum, 0.5, VerboseLevel);
 	  ChannelStopPeak[i] = GetDoubleParam(inname, "ChannelStopPeak_"+profilenum, 0.0, VerboseLevel);	  
 	}
@@ -656,7 +656,7 @@ void MultiGrid::ReadConfigurationFile(string inname)
       ChannelStopDotProfile = GetIntParam(inname, "ChannelStopDotProfile", 0, VerboseLevel);
       if (ChannelStopDotProfile == 0)
 	{
-	  ChannelStopDotDoping = GetDoubleParam(inname, "ChannelStopDotDoping", 5.0E11, VerboseLevel);
+	  ChannelStopDotDoping = GetDoubleParam(inname, "ChannelStopDotDoping", 0.0, VerboseLevel);
 	  ChannelStopDotDepth = GetDoubleParam(inname, "ChannelStopDotDepth", 1.0, VerboseLevel);
 	}
       else
@@ -667,7 +667,7 @@ void MultiGrid::ReadConfigurationFile(string inname)
 	  for (i=0; i<ChannelStopDotProfile; i++)
 	    {
 	      profilenum = std::to_string(i);
-	      ChannelStopDotDose[i] = GetDoubleParam(inname, "ChannelStopDotDose_"+profilenum, 5.0E11, VerboseLevel);
+	      ChannelStopDotDose[i] = GetDoubleParam(inname, "ChannelStopDotDose_"+profilenum, 0.0, VerboseLevel);
 	      ChannelStopDotSigma[i] = GetDoubleParam(inname, "ChannelStopDotSigma_"+profilenum, 0.5, VerboseLevel);
 	      ChannelStopDotPeak[i] = GetDoubleParam(inname, "ChannelStopDotPeak_"+profilenum, 0.0, VerboseLevel);	  
 	    }
@@ -793,7 +793,8 @@ void MultiGrid::ReadConfigurationFile(string inname)
 	  NumElec = GetIntParam(inname, "NumElec", 1620, VerboseLevel);
 	  Fe55CloudRadius = GetDoubleParam(inname, "Fe55CloudRadius", 0.2, VerboseLevel);	  
 	  Fe55ElectronMult = GetDoubleParam(inname, "Fe55ElectronMult", 1.0, VerboseLevel);
-	  Fe55HoleMult = GetDoubleParam(inname, "Fe55HoleMult", 1.0, VerboseLevel);	  	  
+	  Fe55HoleMult = GetDoubleParam(inname, "Fe55HoleMult", 1.0, VerboseLevel);
+	  Fe55PenetrationDepth = GetDoubleParam(inname, "Fe55PenetrationDepth", 30.0, VerboseLevel);	  	  	  
 	}
       
       for (i=0; i<NumberofPixelRegions; i++)
@@ -2469,7 +2470,7 @@ void MultiGrid::TraceFe55Cloud(int m)
   // down to the final pixels.  Mutual repulsion of the electrons in the cloud is included.
   // Currently only supports ElectronMethod = 2
   
-  int i, j, n, nn, phase, bottomphase = 4, bottomcount, topcount, tracesteps = 0, tracestepsmax = 4000;
+  int i, j, n, nn, phase, bottomphase = 4, bottomcount, topcount, tracesteps = 0, tracestepsmax = 20000;
   double mu, E2, Emag, r2, sqrtr2, ve=0.0, vth=0.0, tau=0.0, Tscatt=0.0;
   double rsq, rcloud, v1, v2, fac, xcenter, ycenter, zcenter;
   double theta, phiangle, zmin, zmax;
@@ -2480,11 +2481,10 @@ void MultiGrid::TraceFe55Cloud(int m)
   // This sets the minimum radius for calculating the mutual
   // attraction and repulsion.  this prevents these fields from getting too large
   // Currently set at 0.001 micron
-  zmax = SensorThickness - 2.0;
-  zmin = E[0]->z[Channelkmin];
+  zmax = SensorThickness - 1.0;
+  zmin = 1.0; 
   double*  E_interp = new double[3];
   double* r = new double[3]; 
-  double PenetrationDepth = 30.0; // Exponential penetration depth in microns
   string underscore = "_", slash = "/", name = "Pts";
   string StepNum = std::to_string(m);
   string filename = (outputfiledir+slash+outputfilebase+underscore+StepNum+underscore+name+".dat");
@@ -2517,7 +2517,7 @@ void MultiGrid::TraceFe55Cloud(int m)
   xcenter += PixelSizeX * (0.5 - drand48());
   ycenter += PixelSizeY * (0.5 - drand48());  
   // Draw zcenter from an exponential distribution. Keep it in the silicon.
-  zcenter = SensorThickness + PenetrationDepth * log(1.0 - drand48());
+  zcenter = SensorThickness + Fe55PenetrationDepth * log(1.0 - drand48());
   zcenter = max(zmin, min(zmax, zcenter));
 
   // Now generate the initial charge cloud
@@ -2573,7 +2573,7 @@ void MultiGrid::TraceFe55Cloud(int m)
       tracesteps += 1;
       for (n=0; n<NumElec; n++)
 	{
-	  if (Ecloud[n][2] < zmin) continue; // This electron has finished
+	  if (Ecloud[n][2] > zmax) continue; // This electron has finished
 	  // Get the background field
 	  for (i=0; i<3; i++)
 	    {
@@ -2582,8 +2582,8 @@ void MultiGrid::TraceFe55Cloud(int m)
 	  // Now add in the mutual repulsion, one electron at a time
 	  for (nn=0; nn<NumElec; nn++)
 	    {
-	      if (n == nn || Ecloud[nn][2] < zmin) continue;
-	      // Skip yourself, and anything which has reached the bottom
+	      if (n == nn || Ecloud[nn][2] > zmax) continue;
+	      // Skip yourself, and anything which has reached the top
 	      r2 = 0.0;
 	      for (i=0; i<3; i++)
 		{
@@ -2599,8 +2599,8 @@ void MultiGrid::TraceFe55Cloud(int m)
 	  // Now add in the mutual attraction, one hole at a time
 	  for (nn=0; nn<NumElec; nn++)
 	    {
-	      if (Hcloud[nn][2] > zmax) continue;
-	      // Skip any hole which has reached the top side
+	      if (Hcloud[nn][2] < zmin) continue;
+	      // Skip any hole which has reached the bottom
 	      r2 = 0.0;
 	      for (i=0; i<3; i++)
 		{
@@ -2636,17 +2636,12 @@ void MultiGrid::TraceFe55Cloud(int m)
 	      file << setw(8) << n << setw(8) << tracesteps << setw(3) << phase
 		   << setw(15) << Ecloud[n][0] << setw(15) << Ecloud[n][1] << setw(15) << Ecloud[n][2] << endl;
 	    }
-	  if (Ecloud[n][2] < zmin)
+	  if (Ecloud[n][2] > zmax)
 	    {
-	      bottomcount += 1;
-	      // Find the pixel the charge is in and add 1 electron to it.
-	      int PixX = (int)floor((Ecloud[n][0] - PixelBoundaryLowerLeft[0]) / PixelSizeX);
-	      int PixY = (int)floor((Ecloud[n][1] - PixelBoundaryLowerLeft[1]) / PixelSizeY);
-	      j = PixX + PixelBoundaryNx * PixY;
-	      if (j >= 0 && j < PixelBoundaryNx * PixelBoundaryNy)   CollectedCharge[0][j] += 1;
+	      topcount += 1;
 	      if (VerboseLevel > 1)
 		{
-		  printf("In TraceFe55Cloud. Electron %d finished in Pixel (%d, %d)\n",n,PixX,PixY);
+		  printf("In TraceFe55Cloud. Electron %d has reached the top after % d steps\n",n, tracesteps);
 		}
 		// Log the last position update.
 	      file << setw(8) << n << setw(8) << tracesteps << setw(3) << bottomphase
@@ -2656,7 +2651,7 @@ void MultiGrid::TraceFe55Cloud(int m)
       // Now track the holes.
       for (n=0; n<NumElec; n++)
 	{
-	  if (Hcloud[n][2] > zmax) continue; // This hole has reached the top
+	  if (Hcloud[n][2] < zmin) continue; // This hole has reached the bottom
 	  // Get the background field
 	  for (i=0; i<3; i++)
 	    {
@@ -2665,8 +2660,8 @@ void MultiGrid::TraceFe55Cloud(int m)
 	  // Now add in the mutual attraction, one electron at a time
 	  for (nn=0; nn<NumElec; nn++)
 	    {
-	      if (Ecloud[nn][2] < zmin) continue;
-	      // Skip anything which has reached the bottom
+	      if (Ecloud[nn][2] > zmax) continue;
+	      // Skip anything which has reached the top
 	      r2 = 0.0;
 	      for (i=0; i<3; i++)
 		{
@@ -2682,8 +2677,8 @@ void MultiGrid::TraceFe55Cloud(int m)
 	  // Now add in the mutual repulsion, one hole at a time
 	  for (nn=0; nn<NumElec; nn++)
 	    {
-	      if (n == nn || Hcloud[nn][2] > zmax) continue;	      
-	      // Skip yourself and any hole which has reached the top side
+	      if (n == nn || Hcloud[nn][2] < zmin) continue;	      
+	      // Skip yourself and any hole which has reached the bottom
 	      r2 = 0.0;
 	      for (i=0; i<3; i++)
 		{
@@ -2706,7 +2701,6 @@ void MultiGrid::TraceFe55Cloud(int m)
 	  Emag = max(0.1, sqrt(E2));
 	  mu = mu_Si(Emag * MICRON_PER_CM, CCDTemperature) / 3.0; // Mobility
 	  // For now, use the hack that the hole mobility is 1/3 the electrons
-	  // Hole motion is not critical to device operation
 	  // Reverse sign on ve because of opposite charge
 	  ve = -mu * MICRON_PER_CM * MICRON_PER_CM; // Drift Velocity Factor (Velocity / E)
 	  tau  = ME / QE * mu * METER_PER_CM * METER_PER_CM; // scattering time
@@ -2722,12 +2716,17 @@ void MultiGrid::TraceFe55Cloud(int m)
 	      hfile << setw(8) << n << setw(8) << tracesteps << setw(3) << phase
 		   << setw(15) << Hcloud[n][0] << setw(15) << Hcloud[n][1] << setw(15) << Hcloud[n][2] << endl;
 	    }
-	  if (Hcloud[n][2] > zmax)
+	  if (Hcloud[n][2] < zmin)
 	    {
-	      topcount += 1;
+	      bottomcount += 1;
+	      // Find the pixel the charge is in and add 1 hole to it.
+	      int PixX = (int)floor((Hcloud[n][0] - PixelBoundaryLowerLeft[0]) / PixelSizeX);
+	      int PixY = (int)floor((Hcloud[n][1] - PixelBoundaryLowerLeft[1]) / PixelSizeY);
+	      j = PixX + PixelBoundaryNx * PixY;
+	      if (j >= 0 && j < PixelBoundaryNx * PixelBoundaryNy)   CollectedCharge[0][j] += 1;
 	      if (VerboseLevel > 1)
 		{
-		  printf("In TraceFe55Cloud. Hole %d has reached the top after %d steps.\n",n,tracesteps);
+		  printf("In TraceFe55Cloud. Hole %d has reached the bottom after %d steps in pixel (%d, %d).\n",n,tracesteps, PixX, PixY);
 		}
 	      // Log the last position update.
 	      hfile << setw(8) << n << setw(8) << tracesteps << setw(3) << bottomphase
